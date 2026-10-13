@@ -1,55 +1,74 @@
 # Gym App
 
-A local-first gym training journal for **Android and iOS**, built with Expo SDK 57, React Native, TypeScript, and Expo Router.
+**Android + iOS personal fitness journal** built with Expo, React Native and TypeScript.
 
-## Features
+The approved product includes **workouts, cardio, nutrition, hydration, body measurements, goals and wellbeing**. The app is offline-first and will not require an account for v1.0.
 
-- Start, edit, and finish workout sessions.
-- Browse and search a starter exercise library.
-- Track sets, reps, and weights.
-- Review completed sessions and training volume.
-- Switch between kilograms and pounds, and system/light/dark themes.
-- Store training history locally on the device (no account required).
+> The repository currently contains a working *starter implementation* of workout logging, exercise search, session history and settings. Nutrition, wellbeing and the persistent SQLite architecture are planned but **not yet implemented**.
 
-Workout data stays on the device. The app has **no backend, cloud sync, or authentication** at this stage. AsyncStorage is unencrypted; do not store secrets or sensitive credentials in it.
+See the [approved product roadmap](docs/product-plan.md) for the scope and 15 implementation groups.
+
+## Current features
+
+- Start and finish strength workouts.
+- Choose from a starter exercise library.
+- Track sets, repetitions, loads, completed sets and workout volume.
+- View workouts and training history.
+- Choose kg/lb and light/dark/system appearance.
+- Store workout data locally using AsyncStorage.
+
+There is no authentication, backend, cloud sync or automated backup yet. Do not store secrets or credentials in AsyncStorage.
 
 ## Requirements
 
-- Node.js 22.13+ (Node 22 LTS recommended).
-- npm and a recent Android/iOS simulator or the Expo Go application.
-- macOS/Xcode is needed to run an iOS simulator; a physical iPhone can use Expo Go.
+- **Node.js 22** (22.13 or later); `.nvmrc` pins the supported major.
+- npm.
+- A recent Android/iOS emulator or a physical device with Expo Go.
+- macOS and Xcode are required for the iOS simulator.
 
-## Start
+## Getting started
 
 ```sh
-npm install
+git clone https://github.com/justinangeloperez327/react-native-gym-app.git
+cd react-native-gym-app
+npm ci
 npm run start
 ```
 
-Then scan the QR code with Expo Go, or run `npm run android` / `npm run ios` with an emulator configured.
+To launch a configured emulator directly:
 
-## Quality checks
+```sh
+npm run android
+npm run ios
+```
+
+## Validation
 
 ```sh
 npm run typecheck
-npx expo install --check
+npm run test
+npm run check:expo
 ```
 
-There is no lockfile in this initial bootstrap. After installing dependencies, commit the generated `package-lock.json` so CI can switch to `npm ci` for reproducible installs.
+Or run `npm run validate` for all checks together. The GitHub Actions workflow runs these checks using `npm ci` and a committed `package-lock.json`. Unit tests use the Node.js test runner for dependency-free domain logic.
 
-## Project structure
+## Source layout
 
 ```text
-app/                  Expo Router screens and layouts
-src/components/       Reusable interface components
+app/                  Expo Router routes and tab layouts
+src/components/       Shared UI building blocks
 src/data/             Exercise catalog
-src/lib/              Formatting and workout calculations
-src/state/            Local-first data provider and persistence
-src/theme/            Color palettes and theme selection
-src/types/            Domain models
-.github/workflows/     CI checks
+src/lib/              Workout calculations, unit conversion
+src/state/            Current AsyncStorage provider
+src/theme/            Theme values and appearance
+src/types/            Workout domain types
+tests/                Domain-level automated tests
+docs/                 Approved product roadmap
+.github/workflows/     Reproducible CI
 ```
 
-## Release notes
+## Privacy and release status
 
-Before submitting builds to stores, finalize the app name, bundle identifiers, icons, splash screen, privacy disclosures, and EAS credentials. Running locally does not require a backend.
+Training data currently stays on the device. Uninstalling the application or clearing app storage may erase it. Planned nutrition and wellbeing entries are personal data; exports, local deletion and data recovery must be explicit and tested before release.
+
+Store identifiers, icons, privacy disclosures, EAS signing, installation tests and release builds are still pending. This is a development app, not a published v1.0.
