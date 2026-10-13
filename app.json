@@ -1,0 +1,21 @@
+{
+  "expo": {
+    "name": "Gym App",
+    "slug": "react-native-gym-app",
+    "scheme": "gymapp",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.justinangeloperez.gymapp"
+    },
+    "android": {
+      "package": "com.justinangeloperez.gymapp",
+      "edgeToEdgeEnabled": true
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}
