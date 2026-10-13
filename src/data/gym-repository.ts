@@ -34,7 +34,11 @@ const LEGACY_STATUS = 'legacy_async_storage_v1';
  * delete AsyncStorage records or create synthetic workouts on migration errors.
  */
 export class GymRepository {
-  constructor(private readonly db: SqlDatabase) {}
+  private readonly db: SqlDatabase;
+
+  constructor(db: SqlDatabase) {
+    this.db = db;
+  }
 
   async initialize(readLegacy: () => Promise<string | null>): Promise<void> {
     await this.db.execAsync('PRAGMA foreign_keys = ON;');
