@@ -1,4 +1,4 @@
-import type { Workout, WeightUnit } from '@/src/types/gym';
+import type { Workout, TrainingSet, WeightUnit } from '@/src/types/gym';
 
 export function createId(): string {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
@@ -52,4 +52,24 @@ export function formatDuration(workout: Workout): string {
   const minutes = Math.max(0, Math.floor((end - Date.parse(workout.startedAt)) / 60000));
   const hours = Math.floor(minutes / 60);
   return hours > 0 ? hours + 'h ' + (minutes % 60) + 'm' : minutes + 'm';
+}
+
+// Historic performance never uses a currently active workout. The reference
+// is the latest *finished* session that began before the selected workout.
+export function previousCompletedSets(
+  workouts: readonly Workout[], currentWorkout: Workout, exerciseId: string,
+): TrainingSet[] {
+  const previous = workouts
+    .filter((workout) =>
+      workout.id !== currentWorkout.id &&
+      !!workout.finishedAt &&
+      Date.parse(workout.startedAt) < Date.parse(currentWorkout.startedAt) &&
+      workout.movements.some((movement) => movement.exerciseId === exerciseId))
+    .sort((a, b) => Date.parse(b.startedAt) - Date.parse(a.startedAt))[0];
+  return previous?.movements.find((movement) => movement.exerciseId === exerciseId)
+    ?.sets.filter((set) => set.completed).map((set) => ({ ...set })) ?? [];
+}
+
+export function completedWorkoutCount(workouts: readonly Workout[]): number {
+  return workouts.filter((workout) => !!workout.finishedAt).length;
 }

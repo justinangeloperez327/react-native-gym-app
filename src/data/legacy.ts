@@ -25,12 +25,14 @@ export function isGymData(value: unknown): value is GymData {
       !Number.isFinite(Date.parse(workout.startedAt)) ||
       (workout.finishedAt !== null && (typeof workout.finishedAt !== 'string' ||
         !Number.isFinite(Date.parse(workout.finishedAt)))) ||
-      !Array.isArray(workout.movements)) return false;
+      !Array.isArray(workout.movements) ||
+      (workout.notes !== undefined && (typeof workout.notes !== 'string' || workout.notes.length > 4000))) return false;
     workoutIds.add(workout.id);
     return workout.movements.every((movement: unknown) => {
       if (!isRecord(movement) || typeof movement.id !== 'string' || !movement.id ||
         movementIds.has(movement.id) || typeof movement.exerciseId !== 'string' ||
-        !movement.exerciseId || !Array.isArray(movement.sets)) return false;
+        !movement.exerciseId || !Array.isArray(movement.sets) ||
+      (movement.notes !== undefined && (typeof movement.notes !== 'string' || movement.notes.length > 2000))) return false;
       movementIds.add(movement.id);
       return movement.sets.every((set: unknown) => {
         if (!isRecord(set) || typeof set.id !== 'string' || !set.id ||

@@ -58,7 +58,7 @@ test('initialization creates foreign-keyed schema once and defaults', async () =
   try {
     const repo = new GymRepository(db);
     await repo.initialize(async () => null);
-    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 2);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 3);
     assert.equal((await db.getFirstAsync('PRAGMA foreign_keys')).foreign_keys, 1);
     assert.deepEqual(await repo.readSnapshot(), {
       version: 1, workouts: [], preferences: { unit: 'kg', theme: 'system' },
@@ -181,14 +181,14 @@ test('newer database schema is never downgraded', async () => {
 });
 
 
-test('v1 to v2 migration preserves existing workout history and preference choices', async () => {
+test('v1 to v3 migration preserves existing workout history and preference choices', async () => {
   const db = new NativeTestDatabase();
   try {
     const repo = new GymRepository(db);
     await repo.initialize(async () => JSON.stringify(sample()));
-    await db.execAsync('DROP INDEX idx_custom_exercises_name; DROP INDEX idx_custom_exercises_kind; DROP TABLE custom_exercises; PRAGMA user_version = 1;');
+    await db.execAsync('DROP INDEX idx_custom_exercises_name; DROP INDEX idx_custom_exercises_kind; DROP TABLE custom_exercises; ALTER TABLE workouts DROP COLUMN notes; ALTER TABLE workout_movements DROP COLUMN notes; PRAGMA user_version = 1;');
     await repo.initialize(async () => { throw new Error('Legacy data should not be read twice'); });
-    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 2);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 3);
     assert.deepEqual(await repo.readSnapshot(), sample());
     assert.deepEqual(await repo.readCustomExercises(), []);
   } finally { db.close(); }
@@ -254,5 +254,69 @@ test('failed migration to v2 rolls back version and does not delete workouts', a
     await assert.rejects(repo.initialize(async () => null), /no such column|name/i);
     assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 1);
     assert.deepEqual(await repo.readSnapshot(), sample());
+  } finally { db.close(); }
+});
+
+
+test('upgrading an actual v2 database adds note fields without rewriting workout history', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const { MIGRATION_V1, MIGRATION_V2 } = await import('../src/data/migrations.ts');
+    await db.execAsync('PRAGMA foreign_keys = ON;');
+    await db.execAsync(MIGRATION_V1);
+    await db.execAsync(MIGRATION_V2);
+    await db.runAsync('INSERT INTO workouts (id, started_at, finished_at) VALUES (?, ?, ?)',
+      'old-session', '2026-10-12T08:00:00Z', null);
+    await db.runAsync('INSERT INTO workout_movements (id, workout_id, exercise_id, position) VALUES (?, ?, ?, ?)',
+      'old-movement', 'old-session', 'bench-press', 0);
+    await db.runAsync('INSERT INTO workout_sets (id, movement_id, position, reps, weight_kg, completed) VALUES (?, ?, ?, ?, ?, ?)',
+      'old-set', 'old-movement', 0, 5, 80, 1);
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => null);
+    const saved = await repo.readSnapshot();
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 3);
+    assert.equal(saved.workouts[0].id, 'old-session');
+    assert.equal(saved.workouts[0].movements[0].sets[0].weightKg, 80);
+    assert.equal(saved.workouts[0].notes, undefined);
+    assert.equal(saved.workouts[0].movements[0].notes, undefined);
+  } finally { db.close(); }
+});
+
+test('workout and exercise notes round-trip and survive session completion', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => null);
+    const workout = {
+      ...sample().workouts[0],
+      notes: 'Good session, careful shoulder next time',
+      movements: sample().workouts[0].movements.map((m) =>
+        ({ ...m, notes: 'Controlled eccentric' })),
+    };
+    await repo.upsertWorkout(workout);
+    assert.deepEqual((await repo.readSnapshot()).workouts[0], workout);
+    const finished = { ...workout, finishedAt: '2026-10-12T10:45:00.000Z' };
+    await repo.upsertWorkout(finished);
+    const result = (await repo.readSnapshot()).workouts[0];
+    assert.equal(result.finishedAt, finished.finishedAt);
+    assert.equal(result.notes, workout.notes);
+    assert.equal(result.movements[0].notes, workout.movements[0].notes);
+    await assert.rejects(repo.upsertWorkout({ ...workout, notes: 'x'.repeat(4001) }), /Invalid workout/);
+  } finally { db.close(); }
+});
+
+test('failed v3 migration rolls back and retains v2 schema plus existing workouts', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const { MIGRATION_V1, MIGRATION_V2 } = await import('../src/data/migrations.ts');
+    await db.execAsync(MIGRATION_V1);
+    await db.execAsync(MIGRATION_V2);
+    await db.execAsync("INSERT INTO workouts (id, started_at, finished_at) VALUES ('safe', '2026-10-12T10:00:00Z', NULL)");
+    await db.execAsync("ALTER TABLE workouts ADD COLUMN notes TEXT NOT NULL DEFAULT ''");
+    const repo = new GymRepository(db);
+    await assert.rejects(repo.initialize(async () => null), /duplicate column/i);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 2);
+    assert.equal((await db.getFirstAsync('SELECT COUNT(*) AS n FROM workouts')).n, 1);
+    assert.equal((await db.getFirstAsync('PRAGMA table_info(workout_movements)'))?.name, 'id');
   } finally { db.close(); }
 });

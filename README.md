@@ -15,6 +15,8 @@ See the [approved product roadmap](docs/product-plan.md) for the scope and 15 im
 - Search and filter strength, bodyweight, and cardio activities by muscle group and equipment.
 - Create, edit and archive custom exercises in SQLite without losing historical workout references.
 - Track sets, repetitions, loads, completed sets and workout volume.
+- Resume unfinished sessions, write workout/exercise notes, review and copy previous sets, and remove individual sets.
+- See local save status and retry failed writes; workout start/finish waits for SQLite confirmation.
 - View workouts and training history.
 - Choose kg/lb and light/dark/system appearance.
 - Store workout data locally in Expo SQLite with transactional writes and schema migrations.
@@ -93,3 +95,11 @@ See [SQLite migration details](docs/sqlite.md).
 ## Exercise library (Group 4)
 
 The catalog contains built-in strength, bodyweight, and cardio activities, with stable built-in IDs used by historical workouts. Custom exercises live in the version-2 SQLite `custom_exercises` table. Archiving removes entries from new-workout selection but preserves their names for existing workouts. Search supports activity type, muscle group, equipment and text. Current workout set entry supports only repetition-based activities; duration and distance logging arrives in Group 7.
+
+## Workout persistence and recovery (Group 5)
+
+SQLite schema version 3 adds optional session and exercise notes. Workouts and their sets remain available after restarting the app, including unfinished sessions. Starting or finishing a workout waits for SQLite confirmation before navigation. Set edits use an ordered write queue, with visible **Saving / Saved / Save failed** status and an explicit **Retry save** action. After a failed write, the app attempts to repair persisted workouts using the latest in-memory state.
+
+On backgrounding, the app requests a best-effort flush, but mobile operating systems can terminate the process before writes finish. **An edit is durable only after the app shows Saved on device.** Android and iOS process-kill recovery tests are still required.
+
+Previous-performance references use the latest *completed* earlier workout for the same exercise. Copying previous sets produces fresh incomplete set IDs without modifying history.

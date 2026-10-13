@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
 
 /** PRAGMA user_version advances atomically with the DDL transaction. */
 export const MIGRATION_V1 = [
@@ -19,4 +19,10 @@ export const MIGRATION_V2 = [
   'CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_exercises_name ON custom_exercises(name)',
   'CREATE INDEX IF NOT EXISTS idx_custom_exercises_kind ON custom_exercises(kind, archived)',
   'PRAGMA user_version = 2',
+].join(';\n') + ';';
+
+export const MIGRATION_V3 = [
+  "ALTER TABLE workouts ADD COLUMN notes TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE workout_movements ADD COLUMN notes TEXT NOT NULL DEFAULT ''",
+  'PRAGMA user_version = 3',
 ].join(';\n') + ';';

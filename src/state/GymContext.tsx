@@ -1,27 +1,34 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AppState } from 'react-native';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { openGymRepository } from '@/src/data/sqlite-native';
 import { canLogRepetitions, findExercise, hasExerciseName, normalizeExerciseInput } from '@/src/data/exercises';
 import { emptyGymData, LEGACY_KEY } from '@/src/data/legacy';
 import type { GymRepository } from '@/src/data/gym-repository';
-import { createId } from '@/src/lib/workouts';
+import { createId, previousCompletedSets } from '@/src/lib/workouts';
 import type { Exercise, ExerciseInput, GymData, Preferences, TrainingSet, Workout, WorkoutMovement } from '@/src/types/gym';
 
 type GymContextValue = {
   ready: boolean;
   error: string | null;
+  saveStatus: 'saved' | 'saving' | 'error';
+  retrySave: () => Promise<void>;
   workouts: Workout[];
   preferences: Preferences;
   customExercises: Exercise[];
   createCustomExercise: (input: ExerciseInput) => Promise<Exercise>;
   updateCustomExercise: (id: string, input: ExerciseInput) => Promise<void>;
   archiveCustomExercise: (id: string) => Promise<void>;
-  startWorkout: () => string;
+  startWorkout: () => Promise<string>;
+  setWorkoutNotes: (workoutId: string, notes: string) => void;
+  setMovementNotes: (workoutId: string, movementId: string, notes: string) => void;
+  removeSet: (workoutId: string, movementId: string, setId: string) => void;
+  copyPreviousSets: (workoutId: string, movementId: string) => void;
   addMovement: (workoutId: string, exerciseId: string) => void;
   addSet: (workoutId: string, movementId: string) => void;
   updateSet: (workoutId: string, movementId: string, setId: string, patch: Partial<TrainingSet>) => void;
   removeMovement: (workoutId: string, movementId: string) => void;
-  finishWorkout: (workoutId: string) => void;
+  finishWorkout: (workoutId: string) => Promise<void>;
   deleteWorkout: (workoutId: string) => void;
   updatePreferences: (patch: Partial<Preferences>) => void;
 };
@@ -37,12 +44,16 @@ const SAVE_ERROR = 'Unable to save changes to SQLite. Your latest edits may exis
 export function GymProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [data, setData] = useState<GymData>(emptyGymData);
   const [customExercises, setCustomExercises] = useState<Exercise[]>([]);
   const customRef = useRef<Exercise[]>([]);
   const latestRef = useRef<GymData>(data);
   const repositoryRef = useRef<GymRepository | null>(null);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
+  const failedRef = useRef(false);
+  const revisionRef = useRef(0);
+  const repairedThroughRef = useRef(0);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -72,33 +83,101 @@ export function GymProvider({ children }: { children: ReactNode }) {
     return () => { mountedRef.current = false; };
   }, []);
 
-  const persist = useCallback((operation: (repo: GymRepository) => Promise<void>) => {
-    const repository = repositoryRef.current;
-    if (!repository) return;
-    queueRef.current = queueRef.current
-      .then(() => operation(repository))
-      .then(() => {
-        if (mountedRef.current) setError(null);
-      })
-      .catch(() => {
-        if (mountedRef.current) setError(SAVE_ERROR);
-      });
+  const queueOptimistic = useCallback((operation: (repo: GymRepository) => Promise<void>) => {
+    const repo = repositoryRef.current;
+    if (!repo) return;
+    const revision = ++revisionRef.current;
+    if (!failedRef.current && mountedRef.current) setSaveStatus('saving');
+
+    // On failure, the next queued write first restores the full authoritative
+    // in-memory snapshot. Operations already included in that repair are skipped.
+    const task = queueRef.current.then(async () => {
+      if (failedRef.current) {
+        await repo.replaceSnapshot(latestRef.current);
+        repairedThroughRef.current = revisionRef.current;
+        failedRef.current = false;
+      }
+      if (revision > repairedThroughRef.current) await operation(repo);
+    });
+    queueRef.current = task.then(() => {
+      if (mountedRef.current && !failedRef.current && revision === revisionRef.current) {
+        setSaveStatus('saved');
+        setError(null);
+      }
+    }, () => {
+      failedRef.current = true;
+      if (mountedRef.current) {
+        setSaveStatus('error');
+        setError(SAVE_ERROR);
+      }
+    });
   }, []);
 
-  // A custom exercise is reflected in UI only after the SQLite transaction succeeds.
-  const commitExercise = useCallback(async (operation: (repo: GymRepository) => Promise<void>) => {
+  const retrySave = useCallback(async (): Promise<void> => {
     const repo = repositoryRef.current;
-    if (!repo) throw new Error('Exercise database is unavailable.');
-    const job = queueRef.current.then(() => operation(repo));
-    queueRef.current = job.then(() => {}, () => {});
-    try {
-      await job;
-      if (mountedRef.current) setError(null);
-    } catch (cause) {
-      if (mountedRef.current) setError(SAVE_ERROR);
-      throw cause;
-    }
+    if (!repo) throw new Error('Workout database is unavailable');
+    const revision = ++revisionRef.current;
+    if (mountedRef.current) setSaveStatus('saving');
+    const task = queueRef.current.then(() => repo.replaceSnapshot(latestRef.current));
+    queueRef.current = task.then(() => {
+      failedRef.current = false;
+      repairedThroughRef.current = revision;
+      if (mountedRef.current) {
+        setSaveStatus('saved');
+        setError(null);
+      }
+    }, () => {
+      failedRef.current = true;
+      if (mountedRef.current) {
+        setSaveStatus('error');
+        setError(SAVE_ERROR);
+      }
+    });
+    await task;
   }, []);
+
+  const flushChanges = useCallback(async (): Promise<void> => {
+    await queueRef.current;
+    if (failedRef.current) await retrySave();
+    if (failedRef.current) throw new Error(SAVE_ERROR);
+  }, [retrySave]);
+
+  // Navigation is blocked on these writes: a session should not appear to have
+  // started or finished until its corresponding SQLite transaction succeeds.
+  const commitConfirmed = useCallback(async (operation: (repo: GymRepository) => Promise<void>) => {
+    const repo = repositoryRef.current;
+    if (!repo) throw new Error('Workout database is unavailable');
+    await flushChanges();
+    if (mountedRef.current) setSaveStatus('saving');
+    const task = queueRef.current.then(() => operation(repo));
+    queueRef.current = task.then(() => {
+      if (mountedRef.current) {
+        setSaveStatus('saved');
+        setError(null);
+      }
+    }, () => {
+      if (mountedRef.current) {
+        setSaveStatus('error');
+        setError(SAVE_ERROR);
+      }
+    });
+    await task;
+  }, [flushChanges]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'background' || state === 'inactive') {
+        // Best-effort flush; the OS may still terminate the process immediately.
+        void flushChanges().catch(() => {});
+      }
+    });
+    return () => subscription.remove();
+  }, [flushChanges]);
+
+  // Custom exercise edits are only reflected in UI after durable confirmation.
+  const commitExercise = useCallback(async (operation: (repo: GymRepository) => Promise<void>) => {
+    await commitConfirmed(operation);
+  }, [commitConfirmed]);
 
   const createCustomExercise = useCallback(async (input: ExerciseInput): Promise<Exercise> => {
     const normalized = normalizeExerciseInput(input);
@@ -149,22 +228,22 @@ export function GymProvider({ children }: { children: ReactNode }) {
     const snapshot: GymData = { ...current, workouts };
     latestRef.current = snapshot;
     setData(snapshot);
-    persist((repo) => repo.upsertWorkout(next));
-  }, [persist]);
+    queueOptimistic((repo) => repo.upsertWorkout(next));
+  }, [queueOptimistic]);
 
-  const startWorkout = useCallback(() => {
+  const startWorkout = useCallback(async (): Promise<string> => {
     const id = createId();
     const workout: Workout = {
       id, startedAt: new Date().toISOString(), finishedAt: null, movements: [],
     };
+    await commitConfirmed((repo) => repo.upsertWorkout(workout));
     const snapshot: GymData = {
       ...latestRef.current, workouts: [workout, ...latestRef.current.workouts],
     };
     latestRef.current = snapshot;
     setData(snapshot);
-    persist((repo) => repo.upsertWorkout(workout));
     return id;
-  }, [persist]);
+  }, [commitConfirmed]);
 
   const addMovement = useCallback((workoutId: string, exerciseId: string) => {
     const exercise = findExercise(exerciseId, customRef.current);
@@ -217,6 +296,52 @@ export function GymProvider({ children }: { children: ReactNode }) {
     });
   }, [applyWorkout]);
 
+  const removeSet = useCallback((workoutId: string, movementId: string, setId: string) => {
+    applyWorkout(workoutId, (workout) => {
+      if (workout.finishedAt) return workout;
+      return {
+        ...workout, movements: workout.movements.map((movement) =>
+          movement.id === movementId
+            ? { ...movement, sets: movement.sets.filter((set) => set.id !== setId) }
+            : movement),
+      };
+    });
+  }, [applyWorkout]);
+
+  const copyPreviousSets = useCallback((workoutId: string, movementId: string) => {
+    const current = latestRef.current;
+    const workout = current.workouts.find((w) => w.id === workoutId);
+    const movement = workout?.movements.find((m) => m.id === movementId);
+    if (!workout || !movement || workout.finishedAt) return;
+    const prior = previousCompletedSets(current.workouts, workout, movement.exerciseId);
+    if (!prior.length) return;
+    applyWorkout(workoutId, (existing) => ({
+      ...existing,
+      movements: existing.movements.map((item) => item.id === movementId
+        ? { ...item, sets: prior.map((set) => ({
+            id: createId(), reps: set.reps, weightKg: set.weightKg, completed: false,
+          })) }
+        : item),
+    }));
+  }, [applyWorkout]);
+
+  const setWorkoutNotes = useCallback((workoutId: string, notes: string) => {
+    applyWorkout(workoutId, (workout) => {
+      if (workout.finishedAt || (workout.notes ?? '') === notes) return workout;
+      return { ...workout, notes: notes.slice(0, 4000) };
+    });
+  }, [applyWorkout]);
+
+  const setMovementNotes = useCallback((workoutId: string, movementId: string, notes: string) => {
+    applyWorkout(workoutId, (workout) => {
+      if (workout.finishedAt) return workout;
+      if (!workout.movements.some((m) => m.id === movementId && (m.notes ?? '') !== notes)) return workout;
+      return { ...workout, movements: workout.movements.map((m) => m.id === movementId
+        ? { ...m, notes: notes.slice(0, 2000) }
+        : m) };
+    });
+  }, [applyWorkout]);
+
   const removeMovement = useCallback((workoutId: string, movementId: string) => {
     applyWorkout(workoutId, (workout) => {
       if (workout.finishedAt || !workout.movements.some((m) => m.id === movementId)) return workout;
@@ -224,11 +349,18 @@ export function GymProvider({ children }: { children: ReactNode }) {
     });
   }, [applyWorkout]);
 
-  const finishWorkout = useCallback((workoutId: string) => {
-    applyWorkout(workoutId, (workout) => workout.finishedAt
-      ? workout
-      : { ...workout, finishedAt: new Date().toISOString() });
-  }, [applyWorkout]);
+  const finishWorkout = useCallback(async (workoutId: string): Promise<void> => {
+    const selected = latestRef.current.workouts.find((workout) => workout.id === workoutId);
+    if (!selected || selected.finishedAt) return;
+    const finished: Workout = { ...selected, finishedAt: new Date().toISOString() };
+    await commitConfirmed((repo) => repo.upsertWorkout(finished));
+    const snapshot: GymData = {
+      ...latestRef.current,
+      workouts: latestRef.current.workouts.map((w) => w.id === workoutId ? finished : w),
+    };
+    latestRef.current = snapshot;
+    setData(snapshot);
+  }, [commitConfirmed]);
 
   const deleteWorkout = useCallback((workoutId: string) => {
     const current = latestRef.current;
@@ -238,8 +370,8 @@ export function GymProvider({ children }: { children: ReactNode }) {
     };
     latestRef.current = snapshot;
     setData(snapshot);
-    persist((repo) => repo.deleteWorkout(workoutId));
-  }, [persist]);
+    queueOptimistic((repo) => repo.deleteWorkout(workoutId));
+  }, [queueOptimistic]);
 
   const updatePreferences = useCallback((patch: Partial<Preferences>) => {
     const snapshot: GymData = {
@@ -248,14 +380,15 @@ export function GymProvider({ children }: { children: ReactNode }) {
     };
     latestRef.current = snapshot;
     setData(snapshot);
-    persist((repo) => repo.updatePreferences(snapshot.preferences));
-  }, [persist]);
+    queueOptimistic((repo) => repo.updatePreferences(snapshot.preferences));
+  }, [queueOptimistic]);
 
   return (
     <GymContext.Provider value={{
-      ready, error, workouts: data.workouts, preferences: data.preferences,
+      ready, error, saveStatus, retrySave, workouts: data.workouts, preferences: data.preferences,
       customExercises, createCustomExercise, updateCustomExercise, archiveCustomExercise,
-      startWorkout, addMovement, addSet, updateSet, removeMovement,
+      startWorkout, addMovement, addSet, removeSet, copyPreviousSets,
+      setWorkoutNotes, setMovementNotes, updateSet, removeMovement,
       finishWorkout, deleteWorkout, updatePreferences,
     }}>
       {children}

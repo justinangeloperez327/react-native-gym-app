@@ -1,5 +1,5 @@
 import { emptyGymData, isGymData, parseLegacy } from './legacy.ts';
-import { MIGRATION_V1, MIGRATION_V2, SCHEMA_VERSION } from './migrations.ts';
+import { MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, SCHEMA_VERSION } from './migrations.ts';
 import { normalizeExerciseInput } from './exercises.ts';
 import type { GymData, Preferences, Workout, WorkoutMovement, TrainingSet, Exercise } from '../types/gym';
 
@@ -24,8 +24,8 @@ type CountRow = { total: number };
 type SchemaRow = { user_version: number };
 type KeyRow = { value: string };
 type PrefRow = { weight_unit: string; theme: string };
-type WorkoutRow = { id: string; started_at: string; finished_at: string | null };
-type MovementRow = { id: string; workout_id: string; exercise_id: string; position: number };
+type WorkoutRow = { id: string; started_at: string; finished_at: string | null; notes: string };
+type MovementRow = { id: string; workout_id: string; exercise_id: string; position: number; notes: string };
 type ExerciseRow = { id: string; name: string; muscle: Exercise['muscle']; equipment: string; kind: Exercise['kind']; tracking: Exercise['tracking']; archived: number };
 type SetRow = { id: string; movement_id: string; position: number; reps: number; weight_kg: number; completed: number };
 
@@ -59,6 +59,12 @@ export class GymRepository {
     if (currentVersion < 2) {
       await this.db.withExclusiveTransactionAsync(async (tx) => {
         await tx.execAsync(MIGRATION_V2);
+      });
+    }
+
+    if (currentVersion < 3) {
+      await this.db.withExclusiveTransactionAsync(async (tx) => {
+        await tx.execAsync(MIGRATION_V3);
       });
     }
 
@@ -97,10 +103,10 @@ export class GymRepository {
     ) as PrefRow | null;
     if (!prefs) throw new Error('Database preferences missing');
     const rows = await this.db.getAllAsync(
-      'SELECT id, started_at, finished_at FROM workouts ORDER BY started_at DESC, id DESC',
+      'SELECT id, started_at, finished_at, notes FROM workouts ORDER BY started_at DESC, id DESC',
     ) as WorkoutRow[];
     const movements = await this.db.getAllAsync(
-      'SELECT id, workout_id, exercise_id, position FROM workout_movements ORDER BY position',
+      'SELECT id, workout_id, exercise_id, position, notes FROM workout_movements ORDER BY position',
     ) as MovementRow[];
     const sets = await this.db.getAllAsync(
       'SELECT id, movement_id, position, reps, weight_kg, completed FROM workout_sets ORDER BY position',
@@ -114,13 +120,13 @@ export class GymRepository {
     }
     for (const m of movements) {
       const list = byWorkout.get(m.workout_id) ?? [];
-      list.push({ id: m.id, exerciseId: m.exercise_id, sets: byMovement.get(m.id) ?? [] });
+      list.push({ id: m.id, exerciseId: m.exercise_id, sets: byMovement.get(m.id) ?? [], ...(m.notes ? { notes: m.notes } : {}) });
       byWorkout.set(m.workout_id, list);
     }
     const snapshot: GymData = {
       version: 1,
       workouts: rows.map((w) => ({
-        id: w.id, startedAt: w.started_at, finishedAt: w.finished_at,
+        id: w.id, startedAt: w.started_at, finishedAt: w.finished_at, ...(w.notes ? { notes: w.notes } : {}),
         movements: byWorkout.get(w.id) ?? [],
       })),
       preferences: { unit: prefs.weight_unit as Preferences['unit'], theme: prefs.theme as Preferences['theme'] },
@@ -193,15 +199,15 @@ export class GymRepository {
 
 async function writeWorkout(tx: SqlClient, workout: Workout): Promise<void> {
   await tx.runAsync(
-    'INSERT INTO workouts(id, started_at, finished_at) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET started_at=excluded.started_at, finished_at=excluded.finished_at',
-    workout.id, workout.startedAt, workout.finishedAt,
+    'INSERT INTO workouts(id, started_at, finished_at, notes) VALUES (?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET started_at=excluded.started_at, finished_at=excluded.finished_at, notes=excluded.notes',
+    workout.id, workout.startedAt, workout.finishedAt, workout.notes ?? '',
   );
   // Cascade-removal ensures no stale child rows; all changes roll back together.
   await tx.runAsync('DELETE FROM workout_movements WHERE workout_id = ?', workout.id);
   for (const [mIndex, movement] of workout.movements.entries()) {
     await tx.runAsync(
-      'INSERT INTO workout_movements(id, workout_id, exercise_id, position) VALUES (?, ?, ?, ?)',
-      movement.id, workout.id, movement.exerciseId, mIndex,
+      'INSERT INTO workout_movements(id, workout_id, exercise_id, position, notes) VALUES (?, ?, ?, ?, ?)',
+      movement.id, workout.id, movement.exerciseId, mIndex, movement.notes ?? '',
     );
     for (const [sIndex, set] of movement.sets.entries()) {
       await tx.runAsync(

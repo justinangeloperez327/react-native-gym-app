@@ -172,6 +172,22 @@ Group 5 will harden active session persistence when the app backgrounds or is fo
 ### Deliberate scope boundary
 The library can describe cardio and timed activities, but actual distance/duration session logging belongs to Group 7. Custom exercises are soft-archived rather than physically deleted, preserving referential meaning for historical workouts. Built-in IDs from Group 1 stay unchanged.
 
+## Group 5: Workout Tracking Engine
+
+### Implemented
+- [x] Schema version 3 with session and exercise notes, preserving existing v2 workouts.
+- [x] Previous completed-set references and copy with new, incomplete set IDs.
+- [x] Individual set removal, quick add-set duplication, and notes fields.
+- [x] Restore unfinished sessions from SQLite on app restart.
+- [x] Serialized writes, visible save status, full-snapshot repair and manual retry.
+- [x] Wait for committed SQLite writes before navigating after start/finish.
+- [x] Best-effort save flush when app backgrounds or becomes inactive.
+- [x] Tests for history lookup, notes persistence, and migration.
+- [ ] Verify final Group 5 CI on main.
+- [ ] Android/iOS keyboard, interruption and process-recovery testing.
+
+**Limitations:** An abrupt process kill can interrupt an async save; the edit is durable only after the app confirms it. Group 14 completes broader crash-recovery and device testing.
+
 ## Versioning
 
 Keep the app prerelease until Group 15. Version `0.1.0` identifies the current development baseline; it is not a claim of production readiness. Publish v1.0.0 only after the complete fitness core and quality gates above are satisfied.

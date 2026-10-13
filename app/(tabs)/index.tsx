@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
-import { Text, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, Text, View } from 'react-native';
 import { AppButton, EmptyState, Metric, Page, Panel, ScreenHeader, SectionTitle } from '@/src/components/ui';
 import { WorkoutPreview } from '@/src/components/WorkoutPreview';
 import { completedSets, formatWeight, totalVolumeKg } from '@/src/lib/workouts';
@@ -9,6 +10,7 @@ import { useAppTheme } from '@/src/theme/colors';
 export default function HomeScreen() {
   const { workouts, preferences, startWorkout, error } = useGym();
   const { colors } = useAppTheme();
+  const [starting, setStarting] = useState(false);
   const finished = workouts.filter((workout) => workout.finishedAt);
   const active = workouts.filter((workout) => !workout.finishedAt);
   const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
@@ -18,9 +20,17 @@ export default function HomeScreen() {
   const sets = weekly.reduce((sum, workout) => sum + completedSets(workout), 0);
   const volume = weekly.reduce((sum, workout) => sum + totalVolumeKg(workout), 0);
 
-  function begin() {
-    const id = startWorkout();
-    router.push({ pathname: '/workout/[id]', params: { id } });
+  async function begin() {
+    if (starting) return;
+    setStarting(true);
+    try {
+      const id = await startWorkout();
+      router.push({ pathname: '/workout/[id]', params: { id } });
+    } catch {
+      Alert.alert('Unable to start workout', 'The session could not be saved. Check storage and try again.');
+    } finally {
+      setStarting(false);
+    }
   }
 
   return (
@@ -29,7 +39,7 @@ export default function HomeScreen() {
       {error ? <Panel><Text style={{ color: colors.danger }}>{error}</Text></Panel> : null}
       <View style={{ gap: 10 }}>
         <SectionTitle>Quick start</SectionTitle>
-        <AppButton title="Start an empty workout" onPress={begin} />
+        <AppButton title="Start an empty workout" onPress={() => { void begin(); }} disabled={starting} />
       </View>
       {active.length ? (
         <View style={{ gap: 10 }}>

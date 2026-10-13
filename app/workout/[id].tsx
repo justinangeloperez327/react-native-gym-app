@@ -5,20 +5,21 @@ import { AppButton, EmptyState, Heading, Page, Panel, SectionTitle } from '@/src
 import { findExercise } from '@/src/data/exercises';
 import {
   completedSets, formatDate, formatDuration, formatWeight,
-  toDisplayWeight, toKg, totalVolumeKg,
+  previousCompletedSets, toDisplayWeight, toKg, totalVolumeKg,
 } from '@/src/lib/workouts';
 import { useGym } from '@/src/state/GymContext';
 import { useAppTheme } from '@/src/theme/colors';
-import type { TrainingSet, WeightUnit, WorkoutMovement } from '@/src/types/gym';
+import type { TrainingSet, WeightUnit, Workout, WorkoutMovement } from '@/src/types/gym';
 
 function SetEditor({
-  set, index, unit, readOnly, onSave,
+  set, index, unit, readOnly, onSave, onRemove,
 }: {
   set: TrainingSet;
   index: number;
   unit: WeightUnit;
   readOnly: boolean;
   onSave: (patch: Partial<TrainingSet>) => void;
+  onRemove: () => void;
 }) {
   const { colors } = useAppTheme();
   const [reps, setReps] = useState(String(set.reps));
@@ -30,47 +31,49 @@ function SetEditor({
   }, [set.reps, set.weightKg, unit]);
 
   function commit(extra?: Partial<TrainingSet>): boolean {
-    const parsedReps = Number(reps);
-    const parsedWeight = Number(weight);
-    if (!reps.trim() || !weight.trim() || !Number.isSafeInteger(parsedReps) || parsedReps < 0 ||
-        !Number.isFinite(parsedWeight) || parsedWeight < 0) {
-      Alert.alert('Invalid set', 'Enter a non-negative whole number for reps and a non-negative weight.');
+    const repValue = Number(reps);
+    const weightValue = Number(weight);
+    if (!reps.trim() || !weight.trim() || !Number.isSafeInteger(repValue) || repValue < 0 ||
+        !Number.isFinite(weightValue) || weightValue < 0) {
+      Alert.alert('Invalid set', 'Enter a non-negative whole number of reps and a non-negative weight.');
       setReps(String(set.reps));
       setWeight(String(Number(toDisplayWeight(set.weightKg, unit).toFixed(1))));
       return false;
     }
-    onSave({ reps: parsedReps, weightKg: toKg(parsedWeight, unit), ...extra });
+    const patch = { reps: repValue, weightKg: toKg(weightValue, unit), ...extra };
+    // Avoid redundant disk transactions when no value has changed.
+    if (patch.reps !== set.reps || Math.abs(patch.weightKg - set.weightKg) > 0.00001 ||
+      (patch.completed !== undefined && patch.completed !== set.completed)) {
+      onSave(patch);
+    }
     return true;
   }
 
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 3 }}>
-      <Text style={{ width: 25, color: colors.muted, fontWeight: '600' }}>{index + 1}</Text>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 3 }}>
+      <Text style={{ width: 24, color: colors.muted, fontSize: 13, fontWeight: '600' }}>{index + 1}</Text>
       <TextInput accessibilityLabel={'Set ' + (index + 1) + ' repetitions'}
         keyboardType="number-pad" selectTextOnFocus editable={!readOnly}
-        value={reps} onChangeText={setReps}
-        onBlur={() => { if (!readOnly) commit(); }}
+        value={reps} onChangeText={setReps} onBlur={() => { if (!readOnly) commit(); }}
         style={{
-          flex: 1, textAlign: 'center', minHeight: 42, borderRadius: 6, borderWidth: 1,
+          flex: 1, textAlign: 'center', minHeight: 44, borderRadius: 6, borderWidth: 1,
           borderColor: colors.border, backgroundColor: colors.background, color: colors.text,
         }}
       />
       <TextInput accessibilityLabel={'Set ' + (index + 1) + ' weight in ' + unit}
         keyboardType="decimal-pad" selectTextOnFocus editable={!readOnly}
-        value={weight} onChangeText={setWeight}
-        onBlur={() => { if (!readOnly) commit(); }}
+        value={weight} onChangeText={setWeight} onBlur={() => { if (!readOnly) commit(); }}
         style={{
-          flex: 1, textAlign: 'center', minHeight: 42, borderRadius: 6, borderWidth: 1,
+          flex: 1, textAlign: 'center', minHeight: 44, borderRadius: 6, borderWidth: 1,
           borderColor: colors.border, backgroundColor: colors.background, color: colors.text,
         }}
       />
       <Pressable accessibilityRole="checkbox"
         accessibilityLabel={'Set ' + (index + 1) + ' complete'}
         accessibilityState={{ checked: set.completed, disabled: readOnly }}
-        disabled={readOnly}
-        onPress={() => commit({ completed: !set.completed })}
+        disabled={readOnly} onPress={() => commit({ completed: !set.completed })}
         style={{
-          width: 48, minHeight: 42, borderRadius: 6, justifyContent: 'center', alignItems: 'center',
+          width: 44, minHeight: 44, borderRadius: 6, justifyContent: 'center', alignItems: 'center',
           borderWidth: 1, borderColor: set.completed ? colors.success : colors.border,
           backgroundColor: set.completed ? colors.subtle : colors.surface,
         }}>
@@ -78,21 +81,35 @@ function SetEditor({
           {set.completed ? '✓' : '○'}
         </Text>
       </Pressable>
+      {!readOnly ? (
+        <Pressable accessibilityRole="button" accessibilityLabel={'Remove set ' + (index + 1)}
+          onPress={onRemove} style={{ minWidth: 44, minHeight: 44, justifyContent: 'center', alignItems: 'center' }}>
+          <Text style={{ color: colors.danger, fontSize: 16, fontWeight: '600' }}>×</Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
 
 function MovementEditor({
-  movement, workoutId, unit, readOnly,
+  movement, workout, workouts, unit, readOnly,
 }: {
   movement: WorkoutMovement;
-  workoutId: string;
+  workout: Workout;
+  workouts: readonly Workout[];
   unit: WeightUnit;
   readOnly: boolean;
 }) {
   const { colors } = useAppTheme();
-  const { addSet, updateSet, removeMovement, customExercises } = useGym();
+  const { addSet, removeSet, updateSet, removeMovement, copyPreviousSets, setMovementNotes, customExercises } = useGym();
   const exercise = findExercise(movement.exerciseId, customExercises);
+  const prior = previousCompletedSets(workouts, workout, movement.exerciseId);
+  const [notes, setNotes] = useState(movement.notes ?? '');
+
+  useEffect(() => {
+    setNotes(movement.notes ?? '');
+  }, [movement.id, movement.notes]);
+
   return (
     <Panel>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
@@ -103,36 +120,73 @@ function MovementEditor({
           <Text style={{ color: colors.muted, fontSize: 13 }}>{exercise?.muscle ?? 'Other'}</Text>
         </View>
         {!readOnly ? (
-          <Pressable accessibilityRole="button"
-            accessibilityLabel={'Remove ' + (exercise?.name ?? 'exercise')}
-            onPress={() => Alert.alert('Remove exercise?', 'All of its sets will be removed.', [
+          <Pressable accessibilityRole="button" accessibilityLabel={'Remove ' + (exercise?.name ?? 'exercise')}
+            onPress={() => Alert.alert('Remove exercise?', 'All its sets will be removed.', [
               { text: 'Cancel', style: 'cancel' },
-              { text: 'Remove', style: 'destructive', onPress: () => removeMovement(workoutId, movement.id) },
-            ])}>
+              { text: 'Remove', style: 'destructive', onPress: () => removeMovement(workout.id, movement.id) },
+            ])} style={{ minHeight: 44, justifyContent: 'center' }}>
             <Text style={{ color: colors.danger, fontWeight: '600' }}>Remove</Text>
           </Pressable>
         ) : null}
       </View>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <Text style={{ width: 25, color: colors.muted, fontSize: 12 }}>Set</Text>
+      <View style={{ gap: 5, paddingVertical: 6, borderTopWidth: 1, borderBottomWidth: 1, borderColor: colors.border }}>
+        <Text style={{ color: colors.muted, fontSize: 12, fontWeight: '600' }}>Previous completed session</Text>
+        <Text style={{ color: colors.text, fontSize: 13 }}>
+          {prior.length
+            ? prior.map((set) => String(set.reps) + ' × ' + formatWeight(set.weightKg, unit)).join('   ·   ')
+            : 'No previous completed sets'}
+        </Text>
+        {prior.length && !readOnly ? (
+          <Pressable accessibilityRole="button" accessibilityLabel="Copy previous completed sets"
+            onPress={() => Alert.alert('Use previous sets?', 'Replace the current sets with the last completed values?', [
+              { text: 'Cancel', style: 'cancel' },
+              { text: 'Replace sets', onPress: () => copyPreviousSets(workout.id, movement.id) },
+            ])} style={{ minHeight: 44, alignSelf: 'flex-start', justifyContent: 'center' }}>
+            <Text style={{ color: colors.primary, fontWeight: '600', fontSize: 13 }}>Copy previous sets</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <View style={{ flexDirection: 'row', gap: 6 }}>
+        <Text style={{ width: 24, color: colors.muted, fontSize: 12 }}>Set</Text>
         <Text style={{ flex: 1, textAlign: 'center', color: colors.muted, fontSize: 12 }}>Reps</Text>
         <Text style={{ flex: 1, textAlign: 'center', color: colors.muted, fontSize: 12 }}>Weight ({unit})</Text>
-        <Text style={{ width: 48, textAlign: 'center', color: colors.muted, fontSize: 12 }}>Done</Text>
+        <Text style={{ width: 44, textAlign: 'center', color: colors.muted, fontSize: 12 }}>Done</Text>
+        {!readOnly ? <Text style={{ width: 44, textAlign: 'center', color: colors.muted, fontSize: 12 }}>Del.</Text> : null}
       </View>
       {movement.sets.map((set, index) => (
         <SetEditor key={set.id} set={set} index={index} unit={unit} readOnly={readOnly}
-          onSave={(patch) => updateSet(workoutId, movement.id, set.id, patch)} />
+          onSave={(patch) => updateSet(workout.id, movement.id, set.id, patch)}
+          onRemove={() => removeSet(workout.id, movement.id, set.id)} />
       ))}
-      {!readOnly ? <AppButton title="+ Add set" secondary onPress={() => addSet(workoutId, movement.id)} /> : null}
+      {!readOnly ? <AppButton title="+ Add set" secondary onPress={() => addSet(workout.id, movement.id)} /> : null}
+      <Text style={{ color: colors.muted, fontSize: 13 }}>Exercise notes</Text>
+      <TextInput accessibilityLabel={'Notes for ' + (exercise?.name ?? 'exercise')}
+        multiline maxLength={2000} editable={!readOnly} placeholder="Technique, form, or reminders"
+        placeholderTextColor={colors.muted} value={notes} onChangeText={setNotes}
+        onBlur={() => { if (!readOnly) setMovementNotes(workout.id, movement.id, notes); }}
+        style={{
+          minHeight: 54, borderColor: colors.border, borderWidth: 1, borderRadius: 6,
+          padding: 10, backgroundColor: colors.background, color: colors.text, textAlignVertical: 'top',
+        }}
+      />
     </Panel>
   );
 }
 
 export default function WorkoutScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { workouts, preferences, finishWorkout, deleteWorkout } = useGym();
+  const {
+    workouts, preferences, finishWorkout, deleteWorkout, setWorkoutNotes,
+    saveStatus, retrySave, error,
+  } = useGym();
   const { colors } = useAppTheme();
+  const [busy, setBusy] = useState(false);
   const workout = workouts.find((item) => item.id === id);
+  const [notes, setNotes] = useState(workout?.notes ?? '');
+
+  useEffect(() => {
+    setNotes(workout?.notes ?? '');
+  }, [workout?.id, workout?.notes]);
 
   if (!workout) {
     return (
@@ -142,20 +196,28 @@ export default function WorkoutScreen() {
       </Page>
     );
   }
-
   const readOnly = !!workout.finishedAt;
 
-  function finish() {
-    if (!workout || completedSets(workout) === 0) {
+  async function finish() {
+    if (!workout || busy) return;
+    if (completedSets(workout) === 0) {
       Alert.alert('Log a set first', 'Mark at least one set complete before finishing.');
       return;
     }
-    finishWorkout(workout.id);
-    router.replace('/(tabs)/progress');
+    setBusy(true);
+    try {
+      setWorkoutNotes(workout.id, notes);
+      await finishWorkout(workout.id);
+      router.replace('/(tabs)/progress');
+    } catch {
+      Alert.alert('Workout not saved', 'The workout is still available here. Retry saving before leaving the session.');
+    } finally {
+      setBusy(false);
+    }
   }
 
   function removeWorkout() {
-    if (!workout) return;
+    if (!workout || busy) return;
     Alert.alert('Delete workout?', 'This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -168,11 +230,36 @@ export default function WorkoutScreen() {
     ]);
   }
 
+  async function retry() {
+    setBusy(true);
+    try {
+      await retrySave();
+    } catch {
+      Alert.alert('Save failed', 'The changes are still in memory. Check your device storage and try again.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   return (
     <Page>
       <AppButton title="Back" secondary onPress={() => router.back()} />
       <Heading title={readOnly ? 'Workout details' : 'Active workout'}
         subtitle={formatDate(workout.startedAt) + ' · ' + formatDuration(workout)} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+        <Text accessibilityLiveRegion="polite" style={{
+          color: saveStatus === 'error' ? colors.danger : colors.muted, fontSize: 13, fontWeight: '600',
+        }}>
+          {saveStatus === 'error' ? 'Save failed' : saveStatus === 'saving' ? 'Saving changes…' : 'Saved on device'}
+        </Text>
+        {saveStatus === 'error' ? (
+          <Pressable accessibilityRole="button" onPress={() => { void retry(); }}
+            disabled={busy} style={{ minHeight: 44, justifyContent: 'center' }}>
+            <Text style={{ color: colors.primary, fontWeight: '600' }}>Retry save</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      {saveStatus === 'error' && error ? <Text style={{ color: colors.danger, fontSize: 13 }}>{error}</Text> : null}
       <Panel>
         <View style={{ flexDirection: 'row', gap: 12 }}>
           <View style={{ flex: 1, gap: 5 }}>
@@ -192,23 +279,35 @@ export default function WorkoutScreen() {
       <View style={{ gap: 10 }}>
         <SectionTitle>Exercises ({workout.movements.length})</SectionTitle>
         {workout.movements.map((movement) => (
-          <MovementEditor key={movement.id} movement={movement} workoutId={workout.id}
-            unit={preferences.unit} readOnly={readOnly} />
+          <MovementEditor key={movement.id} movement={movement} workout={workout}
+            workouts={workouts} unit={preferences.unit} readOnly={readOnly} />
         ))}
         {!workout.movements.length ? (
-          <EmptyState title="No exercises added"
-            description="Choose an exercise to begin tracking sets and reps." />
+          <EmptyState title="No exercises added" description="Choose an exercise to begin tracking sets and reps." />
         ) : null}
+      </View>
+      <View style={{ gap: 8 }}>
+        <SectionTitle>Session notes</SectionTitle>
+        <TextInput accessibilityLabel="Workout notes" placeholder="How did this session feel?"
+          placeholderTextColor={colors.muted} value={notes} onChangeText={setNotes}
+          multiline maxLength={4000} editable={!readOnly}
+          onBlur={() => { if (!readOnly) setWorkoutNotes(workout.id, notes); }}
+          style={{
+            minHeight: 80, borderColor: colors.border, borderWidth: 1, borderRadius: 6,
+            padding: 12, backgroundColor: colors.surface, color: colors.text, textAlignVertical: 'top',
+          }}
+        />
       </View>
       {!readOnly ? (
         <>
           <AppButton title="+ Add exercise" secondary onPress={() => router.push({
             pathname: '/exercise-picker', params: { workoutId: workout.id },
           })} />
-          <AppButton title="Finish workout" onPress={finish} />
+          <AppButton title={busy ? 'Finishing…' : 'Finish workout'}
+            disabled={busy} onPress={() => { void finish(); }} />
         </>
       ) : null}
-      <AppButton title="Delete workout" secondary destructive onPress={removeWorkout} />
+      <AppButton title="Delete workout" secondary destructive onPress={removeWorkout} disabled={busy} />
     </Page>
   );
 }

@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
-import { Text, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, Text, View } from 'react-native';
 import { AppButton, EmptyState, Page, Panel, ScreenHeader, SectionTitle } from '@/src/components/ui';
 import { WorkoutPreview } from '@/src/components/WorkoutPreview';
 import { useGym } from '@/src/state/GymContext';
@@ -8,11 +9,20 @@ import { useAppTheme } from '@/src/theme/colors';
 export default function TrainScreen() {
   const { workouts, startWorkout } = useGym();
   const { colors } = useAppTheme();
+  const [starting, setStarting] = useState(false);
   const active = workouts.filter((workout) => !workout.finishedAt);
 
-  function begin() {
-    const id = startWorkout();
-    router.push({ pathname: '/workout/[id]', params: { id } });
+  async function begin() {
+    if (starting) return;
+    setStarting(true);
+    try {
+      const id = await startWorkout();
+      router.push({ pathname: '/workout/[id]', params: { id } });
+    } catch {
+      Alert.alert('Unable to start workout', 'The session could not be saved. Check storage and try again.');
+    } finally {
+      setStarting(false);
+    }
   }
 
   return (
@@ -25,7 +35,7 @@ export default function TrainScreen() {
           <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 20 }}>
             Choose exercises and track reps, weight, and sets at your own pace.
           </Text>
-          <AppButton title="Start workout" onPress={begin} />
+          <AppButton title="Start workout" onPress={() => { void begin(); }} disabled={starting} />
         </Panel>
       </View>
       <View style={{ gap: 10 }}>

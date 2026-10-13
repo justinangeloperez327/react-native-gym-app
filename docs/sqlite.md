@@ -39,3 +39,11 @@ Full native Android/iOS upgrade and interruption testing remains required.
 ## Schema version 2 — activity library
 
 `custom_exercises` stores stable `custom:` IDs, names, category, muscle group, equipment, tracking method and archive state. Built-in definitions remain shipped in source code with stable IDs; workout movement IDs refer to either built-in or custom entries. Custom entries are never hard-deleted by the UI, allowing completed workout references to resolve after archival. Timed and distance-based exercises appear in the library but cannot be selected in the rep/weight editor until Group 7.
+
+## Schema version 3 — workout notes and safe session completion
+
+The third schema version adds `notes TEXT NOT NULL DEFAULT ''` to `workouts` and `workout_movements`. Both columns are added transactionally, and older records remain readable. The workout editor can save and display session and exercise notes.
+
+New workout creation and workout completion wait for their SQLite transactions to succeed before navigating away. Intermediate set edits remain optimistic but are serialized; the UI exposes save status and a retry control. If a write fails, the next save or manual retry attempts a full workout snapshot repair. The background lifecycle requests a best-effort flush, which cannot guarantee that a force-terminated process finishes writing.
+
+Previous-performance lookups only reference earlier completed sessions and never modify old workouts.
