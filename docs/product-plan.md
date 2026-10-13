@@ -156,6 +156,22 @@ TypeScript, domain and design-token unit tests, Expo dependency checks, and GitH
 
 Group 5 will harden active session persistence when the app backgrounds or is force-closed.
 
+## Group 4: Exercise and Activity Library
+
+### Implemented
+- [x] Expand the catalog to strength, bodyweight, and cardio activities with stable built-in identifiers.
+- [x] Add searchable activity categories, muscle groups and equipment filters.
+- [x] Add schema migration v2 for custom exercise records.
+- [x] Build create, edit and archive flows for local custom exercises.
+- [x] Keep archived exercises resolvable in workout history.
+- [x] Update the exercise picker and workout details to use custom definitions.
+- [x] Prevent timed/distance activities from being represented as reps and weights.
+- [x] Add catalog validation and SQLite integration tests.
+- [ ] Verify CI and device-level interaction on Android and iOS.
+
+### Deliberate scope boundary
+The library can describe cardio and timed activities, but actual distance/duration session logging belongs to Group 7. Custom exercises are soft-archived rather than physically deleted, preserving referential meaning for historical workouts. Built-in IDs from Group 1 stay unchanged.
+
 ## Versioning
 
 Keep the app prerelease until Group 15. Version `0.1.0` identifies the current development baseline; it is not a claim of production readiness. Publish v1.0.0 only after the complete fitness core and quality gates above are satisfied.

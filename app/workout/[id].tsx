@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, Text, TextInput, View } from 'react-native';
 import { AppButton, EmptyState, Heading, Page, Panel, SectionTitle } from '@/src/components/ui';
-import { getExercise } from '@/src/data/exercises';
+import { findExercise } from '@/src/data/exercises';
 import {
   completedSets, formatDate, formatDuration, formatWeight,
   toDisplayWeight, toKg, totalVolumeKg,
@@ -91,8 +91,8 @@ function MovementEditor({
   readOnly: boolean;
 }) {
   const { colors } = useAppTheme();
-  const { addSet, updateSet, removeMovement } = useGym();
-  const exercise = getExercise(movement.exerciseId);
+  const { addSet, updateSet, removeMovement, customExercises } = useGym();
+  const exercise = findExercise(movement.exerciseId, customExercises);
   return (
     <Panel>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>

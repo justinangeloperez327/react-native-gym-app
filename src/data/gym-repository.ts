@@ -1,6 +1,7 @@
 import { emptyGymData, isGymData, parseLegacy } from './legacy.ts';
-import { MIGRATION_V1, SCHEMA_VERSION } from './migrations.ts';
-import type { GymData, Preferences, Workout, WorkoutMovement, TrainingSet } from '../types/gym';
+import { MIGRATION_V1, MIGRATION_V2, SCHEMA_VERSION } from './migrations.ts';
+import { normalizeExerciseInput } from './exercises.ts';
+import type { GymData, Preferences, Workout, WorkoutMovement, TrainingSet, Exercise } from '../types/gym';
 
 export type SqlParam = string | number | null;
 
@@ -25,6 +26,7 @@ type KeyRow = { value: string };
 type PrefRow = { weight_unit: string; theme: string };
 type WorkoutRow = { id: string; started_at: string; finished_at: string | null };
 type MovementRow = { id: string; workout_id: string; exercise_id: string; position: number };
+type ExerciseRow = { id: string; name: string; muscle: Exercise['muscle']; equipment: string; kind: Exercise['kind']; tracking: Exercise['tracking']; archived: number };
 type SetRow = { id: string; movement_id: string; position: number; reps: number; weight_kg: number; completed: number };
 
 const LEGACY_STATUS = 'legacy_async_storage_v1';
@@ -51,6 +53,12 @@ export class GymRepository {
     if (currentVersion < 1) {
       await this.db.withExclusiveTransactionAsync(async (tx) => {
         await tx.execAsync(MIGRATION_V1);
+      });
+    }
+
+    if (currentVersion < 2) {
+      await this.db.withExclusiveTransactionAsync(async (tx) => {
+        await tx.execAsync(MIGRATION_V2);
       });
     }
 
@@ -119,6 +127,37 @@ export class GymRepository {
     };
     if (!isGymData(snapshot)) throw new Error('Stored workouts failed integrity validation');
     return snapshot;
+  }
+
+  async readCustomExercises(): Promise<Exercise[]> {
+    const rows = await this.db.getAllAsync(
+      'SELECT id, name, muscle, equipment, kind, tracking, archived FROM custom_exercises ORDER BY name COLLATE NOCASE',
+    ) as ExerciseRow[];
+    return rows.map((row) => ({
+      id: row.id, name: row.name, muscle: row.muscle, equipment: row.equipment,
+      kind: row.kind, tracking: row.tracking, custom: true, archived: row.archived === 1,
+    }));
+  }
+
+  async saveCustomExercise(exercise: Exercise): Promise<void> {
+    if (!exercise.custom || !exercise.id.startsWith('custom:')) {
+      throw new Error('Only custom exercise records may be saved.');
+    }
+    const input = normalizeExerciseInput(exercise);
+    await this.db.withExclusiveTransactionAsync(async (tx) => {
+      await tx.runAsync(
+        'INSERT INTO custom_exercises (id, name, muscle, equipment, kind, tracking, archived) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, muscle=excluded.muscle, equipment=excluded.equipment, kind=excluded.kind, tracking=excluded.tracking, archived=excluded.archived',
+        exercise.id, input.name, input.muscle, input.equipment, input.kind,
+        input.tracking, exercise.archived ? 1 : 0,
+      );
+    });
+  }
+
+  async archiveCustomExercise(id: string): Promise<void> {
+    if (!id.startsWith('custom:')) throw new Error('Built-in exercises cannot be archived.');
+    await this.db.withExclusiveTransactionAsync(async (tx) => {
+      await tx.runAsync('UPDATE custom_exercises SET archived = 1 WHERE id = ?', id);
+    });
   }
 
   async upsertWorkout(workout: Workout): Promise<void> {

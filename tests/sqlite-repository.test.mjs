@@ -58,7 +58,7 @@ test('initialization creates foreign-keyed schema once and defaults', async () =
   try {
     const repo = new GymRepository(db);
     await repo.initialize(async () => null);
-    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 1);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 2);
     assert.equal((await db.getFirstAsync('PRAGMA foreign_keys')).foreign_keys, 1);
     assert.deepEqual(await repo.readSnapshot(), {
       version: 1, workouts: [], preferences: { unit: 'kg', theme: 'system' },
@@ -177,5 +177,82 @@ test('newer database schema is never downgraded', async () => {
     const repo = new GymRepository(db);
     await assert.rejects(repo.initialize(async () => null), /newer app version/);
     assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 99);
+  } finally { db.close(); }
+});
+
+
+test('v1 to v2 migration preserves existing workout history and preference choices', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => JSON.stringify(sample()));
+    await db.execAsync('DROP INDEX idx_custom_exercises_name; DROP INDEX idx_custom_exercises_kind; DROP TABLE custom_exercises; PRAGMA user_version = 1;');
+    await repo.initialize(async () => { throw new Error('Legacy data should not be read twice'); });
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 2);
+    assert.deepEqual(await repo.readSnapshot(), sample());
+    assert.deepEqual(await repo.readCustomExercises(), []);
+  } finally { db.close(); }
+});
+
+test('custom exercise persists, updates and archives without mutating workout history', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => null);
+    const custom = {
+      id: 'custom:press', name: 'Landmine Press', muscle: 'Shoulders',
+      equipment: 'Barbell', kind: 'strength', tracking: 'reps', custom: true, archived: false,
+    };
+    await repo.saveCustomExercise(custom);
+    const w = { ...sample().workouts[0], movements: [
+      { ...sample().workouts[0].movements[0], exerciseId: custom.id },
+    ] };
+    await repo.upsertWorkout(w);
+    assert.deepEqual(await repo.readCustomExercises(), [custom]);
+    await repo.saveCustomExercise({ ...custom, name: 'Landmine Shoulder Press' });
+    assert.equal((await repo.readCustomExercises())[0].name, 'Landmine Shoulder Press');
+    await repo.archiveCustomExercise(custom.id);
+    assert.equal((await repo.readCustomExercises())[0].archived, true);
+    assert.equal((await repo.readSnapshot()).workouts[0].movements[0].exerciseId, custom.id);
+    await assert.rejects(
+      repo.archiveCustomExercise('bench-press'), /Built-in exercises/,
+    );
+  } finally { db.close(); }
+});
+
+test('custom exercise unique names and rejected invalid updates do not change stored data', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => null);
+    const first = {
+      id: 'custom:one', name: 'Band Rotation', muscle: 'Shoulders',
+      equipment: 'Resistance Band', kind: 'strength', tracking: 'reps', custom: true,
+    };
+    await repo.saveCustomExercise(first);
+    await assert.rejects(
+      repo.saveCustomExercise({ ...first, id: 'custom:two', name: 'band rotation' }),
+      /UNIQUE|constraint/i,
+    );
+    await assert.rejects(
+      repo.saveCustomExercise({ ...first, name: '' }),
+      /name must contain/,
+    );
+    assert.equal((await repo.readCustomExercises()).length, 1);
+    assert.equal((await repo.readCustomExercises())[0].name, 'Band Rotation');
+  } finally { db.close(); }
+});
+
+test('failed migration to v2 rolls back version and does not delete workouts', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => JSON.stringify(sample()));
+    await db.execAsync('DROP INDEX idx_custom_exercises_name; DROP INDEX idx_custom_exercises_kind; DROP TABLE custom_exercises; PRAGMA user_version = 1;');
+    // A malformed old table causes v2's name index to fail inside its transaction.
+    await db.execAsync('CREATE TABLE custom_exercises (unrelated TEXT);');
+    await assert.rejects(repo.initialize(async () => null), /no such column|name/i);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 1);
+    assert.deepEqual(await repo.readSnapshot(), sample());
   } finally { db.close(); }
 });

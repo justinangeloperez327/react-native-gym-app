@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 /** PRAGMA user_version advances atomically with the DDL transaction. */
 export const MIGRATION_V1 = [
@@ -12,4 +12,11 @@ export const MIGRATION_V1 = [
   'CREATE INDEX IF NOT EXISTS idx_sets_movement ON workout_sets(movement_id)',
   "INSERT OR IGNORE INTO preferences (id, weight_unit, theme) VALUES (1, 'kg', 'system')",
   'PRAGMA user_version = 1',
+].join(';\n') + ';';
+
+export const MIGRATION_V2 = [
+  "CREATE TABLE IF NOT EXISTS custom_exercises (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL COLLATE NOCASE, muscle TEXT NOT NULL, equipment TEXT NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('strength','bodyweight','cardio')), tracking TEXT NOT NULL CHECK(tracking IN ('reps','duration','distance')), archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN (0, 1)))",
+  'CREATE UNIQUE INDEX IF NOT EXISTS idx_custom_exercises_name ON custom_exercises(name)',
+  'CREATE INDEX IF NOT EXISTS idx_custom_exercises_kind ON custom_exercises(kind, archived)',
+  'PRAGMA user_version = 2',
 ].join(';\n') + ';';

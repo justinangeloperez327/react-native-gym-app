@@ -27,6 +27,7 @@ function Navigation() {
         <Stack.Screen name="settings" />
         <Stack.Screen name="workout/[id]" />
         <Stack.Screen name="exercise-picker" />
+        <Stack.Screen name="exercise-form" />
       </Stack>
     </>
   );

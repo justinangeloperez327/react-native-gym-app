@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
-import { getExercise } from '@/src/data/exercises';
+import { findExercise } from '@/src/data/exercises';
 import { completedSets, formatDate, formatDuration, formatWeight, totalVolumeKg } from '@/src/lib/workouts';
 import { useGym } from '@/src/state/GymContext';
 import { useAppTheme } from '@/src/theme/colors';
@@ -8,10 +8,10 @@ import type { Workout } from '@/src/types/gym';
 import { Panel } from './ui';
 
 export function WorkoutPreview({ workout }: { workout: Workout }) {
-  const { preferences } = useGym();
+  const { preferences, customExercises } = useGym();
   const { colors } = useAppTheme();
   const title = workout.movements.slice(0, 2)
-    .map((movement) => getExercise(movement.exerciseId)?.name ?? 'Exercise').join(', ');
+    .map((movement) => findExercise(movement.exerciseId, customExercises)?.name ?? 'Exercise').join(', ');
   return (
     <Pressable accessibilityRole="button"
       accessibilityLabel={'View workout from ' + formatDate(workout.startedAt)}

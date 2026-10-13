@@ -2,22 +2,19 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { AppButton, EmptyState, Heading, Page, Panel } from '@/src/components/ui';
-import { EXERCISES } from '@/src/data/exercises';
+import { activeExercises, canLogRepetitions, searchExercises } from '@/src/data/exercises';
 import { useGym } from '@/src/state/GymContext';
 import { useAppTheme } from '@/src/theme/colors';
 
 export default function ExercisePicker() {
   const { workoutId } = useLocalSearchParams<{ workoutId: string }>();
-  const { workouts, addMovement } = useGym();
+  const { workouts, addMovement, customExercises } = useGym();
   const { colors } = useAppTheme();
   const [search, setSearch] = useState('');
   const workout = workouts.find((item) => item.id === workoutId);
-  const matches = useMemo(
-    () => EXERCISES.filter((exercise) =>
-      (exercise.name + ' ' + exercise.muscle + ' ' + exercise.equipment)
-        .toLowerCase().includes(search.trim().toLowerCase()),
-    ), [search],
-  );
+  const matches = useMemo(() =>
+    searchExercises(activeExercises(customExercises).filter(canLogRepetitions), { query: search }),
+    [search, customExercises]);
 
   if (!workout || workout.finishedAt) {
     return <Page><Heading title="Workout unavailable" />
@@ -27,14 +24,15 @@ export default function ExercisePicker() {
   return (
     <Page>
       <AppButton title="Back to workout" onPress={() => router.back()} secondary />
-      <Heading title="Add an exercise" subtitle="Choose a movement to track your sets." />
-      <TextInput accessibilityLabel="Search exercise to add" placeholder="Search exercise library"
+      <Heading title="Add an exercise" subtitle="Choose a repetition-based movement." />
+      <TextInput accessibilityLabel="Search exercise to add" placeholder="Search exercises"
         placeholderTextColor={colors.muted} value={search} onChangeText={setSearch}
-        style={{
-          backgroundColor: colors.surface, color: colors.text, borderColor: colors.border,
-          borderWidth: 1, paddingHorizontal: 14, minHeight: 46, borderRadius: 8,
-        }}
+        style={{ backgroundColor: colors.surface, color: colors.text, borderColor: colors.border,
+          borderWidth: 1, paddingHorizontal: 12, minHeight: 46, borderRadius: 6 }}
       />
+      <Text style={{ color: colors.muted, fontSize: 13 }}>
+        Timed and cardio logging will be available in Group 7.
+      </Text>
       {matches.map((exercise) => {
         const added = workout.movements.some((movement) => movement.exerciseId === exercise.id);
         return (
@@ -44,8 +42,10 @@ export default function ExercisePicker() {
             <Panel>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
                 <View style={{ flex: 1, gap: 6 }}>
-                  <Text style={{ color: colors.text, fontWeight: '600', fontSize: 16 }}>{exercise.name}</Text>
-                  <Text style={{ color: colors.muted }}>{exercise.muscle} · {exercise.equipment}</Text>
+                  <Text style={{ color: colors.text, fontWeight: '600', fontSize: 15 }}>{exercise.name}</Text>
+                  <Text style={{ color: colors.muted, fontSize: 13 }}>
+                    {exercise.muscle} · {exercise.equipment} · {exercise.kind}
+                  </Text>
                 </View>
                 <Text style={{ color: added ? colors.muted : colors.primary, fontWeight: '600' }}>
                   {added ? 'Added' : '+ Add'}

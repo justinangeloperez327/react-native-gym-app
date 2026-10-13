@@ -10,7 +10,7 @@ Native database: `gym-app.db` via `expo-sqlite` for Android and iOS.
 - `preferences`: current weight unit and appearance
 - `app_metadata`: import marker
 
-SQLite foreign keys are enabled. User version 1 is applied within an exclusive transaction. Later migrations must increase `PRAGMA user_version`; opening a newer schema from an older app fails safely.
+SQLite foreign keys are enabled. Schema version 1 creates workout history and preferences; version 2 adds `custom_exercises` with unique case-insensitive names, category/method metadata and an archive flag. Each migration runs within an exclusive transaction. Later migrations must increase `PRAGMA user_version`; opening a newer schema from an older app fails safely.
 
 ## Initial import
 
@@ -35,3 +35,7 @@ Current SQLite storage is not encrypted. Never save authentication secrets in th
 `npm test` runs schema and transaction integration tests using Node's built-in SQLite engine. Test coverage includes import success, import failure/rollback, no duplicate reimport, cascade deletes and snapshot validation.
 
 Full native Android/iOS upgrade and interruption testing remains required.
+
+## Schema version 2 — activity library
+
+`custom_exercises` stores stable `custom:` IDs, names, category, muscle group, equipment, tracking method and archive state. Built-in definitions remain shipped in source code with stable IDs; workout movement IDs refer to either built-in or custom entries. Custom entries are never hard-deleted by the UI, allowing completed workout references to resolve after archival. Timed and distance-based exercises appear in the library but cannot be selected in the rep/weight editor until Group 7.
