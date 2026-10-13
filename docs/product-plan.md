@@ -184,7 +184,7 @@ The library can describe cardio and timed activities, but actual distance/durati
 - [x] Wait for committed SQLite writes before navigating after start/finish.
 - [x] Best-effort save flush when app backgrounds or becomes inactive.
 - [x] Tests for history lookup, notes persistence, and migration.
-- [ ] Verify final Group 5 CI on main.
+- [x] Verify final Group 5 CI on main.
 - [ ] Android/iOS keyboard, interruption and process-recovery testing.
 
 **Limitations:** An abrupt process kill can interrupt an async save; the edit is durable only after the app confirms it. Group 14 completes broader crash-recovery and device testing.
