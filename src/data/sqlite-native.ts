@@ -3,7 +3,7 @@ import { GymRepository, type SqlClient, type SqlDatabase, type SqlParam } from '
 
 // Keep Expo's native binding behind this adapter so domain persistence can be
 // integration-tested against a real SQLite database without loading React Native.
-type NativeClient = SQLite.SQLiteDatabase | SQLite.SQLiteDatabase;
+type NativeClient = SQLite.SQLiteDatabase;
 function adaptClient(native: NativeClient): SqlClient {
   return {
     execAsync: (sql) => native.execAsync(sql),

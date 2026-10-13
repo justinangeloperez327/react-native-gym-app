@@ -151,7 +151,7 @@ TypeScript, domain and design-token unit tests, Expo dependency checks, and GitH
 - [x] Validated one-time AsyncStorage import; preserve original key and prevent reimport.
 - [x] Serialized native SQLite writes with visible persistence errors.
 - [x] Real SQLite integration tests for migration, rollback and recovery.
-- [ ] Verify final CI and Expo compatibility on `main`.
+- [x] Verify final CI and Expo compatibility on `main`.
 - [ ] Run Android/iOS on-device migration smoke tests.
 
 Group 5 will harden active session persistence when the app backgrounds or is force-closed.
