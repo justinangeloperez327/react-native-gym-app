@@ -117,8 +117,8 @@ Profile/Settings from the Home header. The active workout opens a dedicated scre
 - [x] Introduce tests for existing calculations and the exercise catalog.
 - [x] Add an Expo SDK compatibility check to CI.
 - [x] Explicitly target Android and iOS in Expo configuration.
-- [ ] Generate/commit `package-lock.json`.
-- [ ] Remove one-time lockfile bootstrapping workflow.
+- [x] Generate/commit `package-lock.json`.
+- [x] Remove one-time lockfile bootstrapping workflow.
 - [ ] Verify final PR CI is green.
 
 ### Done means
