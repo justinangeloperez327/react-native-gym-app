@@ -4,7 +4,7 @@
 
 The approved product includes **workouts, cardio, nutrition, hydration, body measurements, goals and wellbeing**. The app is offline-first and will not require an account for v1.0.
 
-> The repository currently contains a working *starter implementation* with five navigation tabs, workout logging, exercise search, session history and settings. Nutrition, wellbeing and the persistent SQLite architecture are planned but **not yet implemented**.
+> The repository currently contains a working *starter implementation* with five navigation tabs, workout logging, exercise search, session history and settings. Nutrition and wellbeing are planned but **not yet implemented**. Workout storage now uses native SQLite; existing AsyncStorage records are imported on upgrade.
 
 See the [approved product roadmap](docs/product-plan.md) for the scope and 15 implementation groups.
 
@@ -16,12 +16,13 @@ See the [approved product roadmap](docs/product-plan.md) for the scope and 15 im
 - Track sets, repetitions, loads, completed sets and workout volume.
 - View workouts and training history.
 - Choose kg/lb and light/dark/system appearance.
-- Store workout data locally using AsyncStorage.
+- Store workout data locally in Expo SQLite with transactional writes and schema migrations.
+- Import valid legacy AsyncStorage workouts without deleting the original source.
 - Compact light/dark UI primitives, shared semantic colors, and accessibility labels.
 
 The Nutrition screen is a clearly marked placeholder; it does not store or calculate meals or hydration yet.
 
-There is no authentication, backend, cloud sync or automated backup yet. Do not store secrets or credentials in AsyncStorage.
+There is no authentication, backend, cloud sync, or automated backup yet. SQLite is unencrypted by default. Do not store credentials in it.
 
 ## Requirements
 
@@ -61,9 +62,9 @@ Or run `npm run validate` for all checks together. The GitHub Actions workflow r
 ```text
 app/                  Expo Router routes and tab layouts
 src/components/       Shared UI building blocks
-src/data/             Exercise catalog
+src/data/             Exercise catalog, schema migrations, SQLite repository
 src/lib/              Workout calculations, unit conversion
-src/state/            Current AsyncStorage provider
+src/state/            React data provider backed by SQLite
 src/theme/            Shared UI tokens, semantic colors and appearance
 src/types/            Workout domain types
 tests/                Domain-level automated tests
@@ -73,6 +74,17 @@ docs/                 Approved product roadmap
 
 ## Privacy and release status
 
-Training data currently stays on the device. Uninstalling the application or clearing app storage may erase it. Planned nutrition and wellbeing entries are personal data; exports, local deletion and data recovery must be explicit and tested before release.
+Training data stays on the device. Legacy AsyncStorage records are retained after migration. If import fails, the app reports an error without replacing the old record. Uninstalling or clearing app storage may erase both copies. Planned nutrition and wellbeing entries are personal data; exports, local deletion and data recovery must be explicit and tested before release.
 
 Store identifiers, icons, privacy disclosures, EAS signing, installation tests and release builds are still pending. This is a development app, not a published v1.0.
+
+## SQLite migration (Group 3)
+
+- Native database: `gym-app.db`; schema version uses `PRAGMA user_version`.
+- Tables: workouts, workout_movements, workout_sets, preferences, app_metadata.
+- Foreign keys, indexes, cascading deletes, transactional writes.
+- Legacy key `gym-app:data:v1` is imported atomically, never deleted or overwritten.
+- Current UI uses serialized async writes. Force-killing immediately after an edit can still interrupt the last write; Group 5 hardens session recovery.
+- Group 13 adds user-controlled backup/import. There is no cloud backup yet.
+
+See [SQLite migration details](docs/sqlite.md).

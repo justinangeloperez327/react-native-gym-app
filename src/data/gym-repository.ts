@@ -1,0 +1,179 @@
+import { emptyGymData, isGymData, parseLegacy } from './legacy.ts';
+import { MIGRATION_V1, SCHEMA_VERSION } from './migrations.ts';
+import type { GymData, Preferences, Workout, WorkoutMovement, TrainingSet } from '../types/gym';
+
+export type SqlParam = string | number | null;
+
+/**
+ * Narrow adapter around expo-sqlite, deliberately portable to Node's sqlite
+ * module for real SQL integration tests. All writes use exclusive transactions.
+ */
+export interface SqlClient {
+  execAsync(source: string): Promise<void>;
+  runAsync(source: string, ...params: SqlParam[]): Promise<unknown>;
+  getFirstAsync(source: string, ...params: SqlParam[]): Promise<unknown | null>;
+  getAllAsync(source: string, ...params: SqlParam[]): Promise<unknown[]>;
+}
+
+export interface SqlDatabase extends SqlClient {
+  withExclusiveTransactionAsync(callback: (transaction: SqlClient) => Promise<void>): Promise<void>;
+}
+
+type CountRow = { total: number };
+type SchemaRow = { user_version: number };
+type KeyRow = { value: string };
+type PrefRow = { weight_unit: string; theme: string };
+type WorkoutRow = { id: string; started_at: string; finished_at: string | null };
+type MovementRow = { id: string; workout_id: string; exercise_id: string; position: number };
+type SetRow = { id: string; movement_id: string; position: number; reps: number; weight_kg: number; completed: number };
+
+const LEGACY_STATUS = 'legacy_async_storage_v1';
+
+/**
+ * SQLite is the source of truth after initialization. This class does not
+ * delete AsyncStorage records or create synthetic workouts on migration errors.
+ */
+export class GymRepository {
+  constructor(private readonly db: SqlDatabase) {}
+
+  async initialize(readLegacy: () => Promise<string | null>): Promise<void> {
+    await this.db.execAsync('PRAGMA foreign_keys = ON;');
+    await this.db.execAsync('PRAGMA journal_mode = WAL;');
+    const row = await this.db.getFirstAsync('PRAGMA user_version') as SchemaRow | null;
+    const currentVersion = row?.user_version ?? 0;
+    if (currentVersion > SCHEMA_VERSION) {
+      throw new Error('This workout database was created by a newer app version. Nothing was changed.');
+    }
+    if (currentVersion < 1) {
+      await this.db.withExclusiveTransactionAsync(async (tx) => {
+        await tx.execAsync(MIGRATION_V1);
+      });
+    }
+
+    // If the legacy key is still present after an import, do not import it again.
+    const previous = await this.db.getFirstAsync(
+      'SELECT value FROM app_metadata WHERE key = ?', LEGACY_STATUS,
+    ) as KeyRow | null;
+    if (previous) return;
+
+    const saved = await readLegacy(); // A read failure is fatal: do not mark migration completed.
+    const legacy = saved === null ? null : parseLegacy(saved);
+    await this.db.withExclusiveTransactionAsync(async (tx) => {
+      const marker = await tx.getFirstAsync(
+        'SELECT value FROM app_metadata WHERE key = ?', LEGACY_STATUS,
+      ) as KeyRow | null;
+      if (marker) return;
+      const count = await tx.getFirstAsync('SELECT COUNT(*) AS total FROM workouts') as CountRow;
+      const current = await tx.getFirstAsync(
+        'SELECT weight_unit, theme FROM preferences WHERE id = 1',
+      ) as PrefRow | null;
+      const customized = current !== null && (current.weight_unit !== 'kg' || current.theme !== 'system');
+      if (legacy && count.total === 0 && !customized) {
+        await writeSnapshot(tx, legacy);
+      }
+      await tx.runAsync(
+        'INSERT INTO app_metadata (key, value) VALUES (?, ?)',
+        LEGACY_STATUS,
+        legacy ? (count.total === 0 && !customized ? 'imported' : 'existing_sqlite_kept') : 'absent',
+      );
+    });
+  }
+
+  async readSnapshot(): Promise<GymData> {
+    const prefs = await this.db.getFirstAsync(
+      'SELECT weight_unit, theme FROM preferences WHERE id = 1',
+    ) as PrefRow | null;
+    if (!prefs) throw new Error('Database preferences missing');
+    const rows = await this.db.getAllAsync(
+      'SELECT id, started_at, finished_at FROM workouts ORDER BY started_at DESC, id DESC',
+    ) as WorkoutRow[];
+    const movements = await this.db.getAllAsync(
+      'SELECT id, workout_id, exercise_id, position FROM workout_movements ORDER BY position',
+    ) as MovementRow[];
+    const sets = await this.db.getAllAsync(
+      'SELECT id, movement_id, position, reps, weight_kg, completed FROM workout_sets ORDER BY position',
+    ) as SetRow[];
+    const byWorkout = new Map<string, WorkoutMovement[]>();
+    const byMovement = new Map<string, TrainingSet[]>();
+    for (const s of sets) {
+      const list = byMovement.get(s.movement_id) ?? [];
+      list.push({ id: s.id, reps: s.reps, weightKg: s.weight_kg, completed: s.completed === 1 });
+      byMovement.set(s.movement_id, list);
+    }
+    for (const m of movements) {
+      const list = byWorkout.get(m.workout_id) ?? [];
+      list.push({ id: m.id, exerciseId: m.exercise_id, sets: byMovement.get(m.id) ?? [] });
+      byWorkout.set(m.workout_id, list);
+    }
+    const snapshot: GymData = {
+      version: 1,
+      workouts: rows.map((w) => ({
+        id: w.id, startedAt: w.started_at, finishedAt: w.finished_at,
+        movements: byWorkout.get(w.id) ?? [],
+      })),
+      preferences: { unit: prefs.weight_unit as Preferences['unit'], theme: prefs.theme as Preferences['theme'] },
+    };
+    if (!isGymData(snapshot)) throw new Error('Stored workouts failed integrity validation');
+    return snapshot;
+  }
+
+  async upsertWorkout(workout: Workout): Promise<void> {
+    // Enforce domain validity before changing persistent state.
+    if (!isGymData({ version: 1, workouts: [workout], preferences: emptyGymData().preferences })) {
+      throw new Error('Invalid workout cannot be saved');
+    }
+    await this.db.withExclusiveTransactionAsync((tx) => writeWorkout(tx, workout));
+  }
+
+  async deleteWorkout(id: string): Promise<void> {
+    await this.db.withExclusiveTransactionAsync(async (tx) => {
+      await tx.runAsync('DELETE FROM workouts WHERE id = ?', id);
+    });
+  }
+
+  async updatePreferences(preferences: Preferences): Promise<void> {
+    if (!isGymData({ version: 1, workouts: [], preferences })) throw new Error('Invalid preferences');
+    await this.db.withExclusiveTransactionAsync(async (tx) => {
+      await tx.runAsync(
+        'UPDATE preferences SET weight_unit = ?, theme = ? WHERE id = 1',
+        preferences.unit, preferences.theme,
+      );
+    });
+  }
+
+  // Import/restore operation: intentionally replaces the complete snapshot atomically.
+  async replaceSnapshot(data: GymData): Promise<void> {
+    if (!isGymData(data)) throw new Error('Invalid snapshot cannot be imported');
+    await this.db.withExclusiveTransactionAsync((tx) => writeSnapshot(tx, data));
+  }
+}
+
+async function writeWorkout(tx: SqlClient, workout: Workout): Promise<void> {
+  await tx.runAsync(
+    'INSERT INTO workouts(id, started_at, finished_at) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET started_at=excluded.started_at, finished_at=excluded.finished_at',
+    workout.id, workout.startedAt, workout.finishedAt,
+  );
+  // Cascade-removal ensures no stale child rows; all changes roll back together.
+  await tx.runAsync('DELETE FROM workout_movements WHERE workout_id = ?', workout.id);
+  for (const [mIndex, movement] of workout.movements.entries()) {
+    await tx.runAsync(
+      'INSERT INTO workout_movements(id, workout_id, exercise_id, position) VALUES (?, ?, ?, ?)',
+      movement.id, workout.id, movement.exerciseId, mIndex,
+    );
+    for (const [sIndex, set] of movement.sets.entries()) {
+      await tx.runAsync(
+        'INSERT INTO workout_sets(id, movement_id, position, reps, weight_kg, completed) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        set.id, movement.id, sIndex, set.reps, set.weightKg, set.completed ? 1 : 0,
+      );
+    }
+  }
+}
+
+async function writeSnapshot(tx: SqlClient, data: GymData): Promise<void> {
+  await tx.runAsync('DELETE FROM workouts');
+  await tx.runAsync(
+    'UPDATE preferences SET weight_unit = ?, theme = ? WHERE id = 1',
+    data.preferences.unit, data.preferences.theme,
+  );
+  for (const workout of data.workouts) await writeWorkout(tx, workout);
+}

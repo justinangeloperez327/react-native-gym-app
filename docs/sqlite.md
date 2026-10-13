@@ -1,0 +1,37 @@
+# SQLite storage and legacy migration
+
+Native database: `gym-app.db` via `expo-sqlite` for Android and iOS.
+
+## Schema
+
+- `workouts`: session IDs and timestamps
+- `workout_movements`: ordered exercise entries, foreign-keyed to workouts
+- `workout_sets`: ordered sets, weights, reps and completion flags
+- `preferences`: current weight unit and appearance
+- `app_metadata`: import marker
+
+SQLite foreign keys are enabled. User version 1 is applied within an exclusive transaction. Later migrations must increase `PRAGMA user_version`; opening a newer schema from an older app fails safely.
+
+## Initial import
+
+1. Open SQLite and create the versioned schema.
+2. If an import marker already exists, do not read or reimport the old key.
+3. Read the legacy `gym-app:data:v1` AsyncStorage value.
+4. Validate the entire record, including nested IDs, timestamps, sets and preferences.
+5. Import only if the SQLite database has no workouts and default preferences; otherwise keep existing SQLite data.
+6. Save the import marker within the same transaction as the import.
+7. Read the authoritative SQLite snapshot and initialize the UI.
+
+The original legacy key is NEVER deleted or overwritten. Invalid or unreadable legacy records fail startup visibly rather than being replaced by empty data. A failed import rolls back and may be retried on next app start.
+
+## Writes and recovery
+
+UI actions update in-memory state immediately and enqueue targeted, serialized native SQLite writes. Each upsert replaces one workout's ordered exercises/sets inside a transaction. On errors, changes roll back and the app shows a persistence warning. Avoid force-closing the app right after a set edit until session write durability is improved in Group 5.
+
+Current SQLite storage is not encrypted. Never save authentication secrets in the workout database. Backups/export are planned for Group 13.
+
+## Verification
+
+`npm test` runs schema and transaction integration tests using Node's built-in SQLite engine. Test coverage includes import success, import failure/rollback, no duplicate reimport, cascade deletes and snapshot validation.
+
+Full native Android/iOS upgrade and interruption testing remains required.

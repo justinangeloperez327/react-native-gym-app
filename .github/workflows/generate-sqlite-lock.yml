@@ -1,0 +1,32 @@
+name: Generate SQLite dependency lockfile
+
+# Temporary one-time workflow. Remove after the lockfile commit succeeds.
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/generate-sqlite-lock.yml
+
+permissions:
+  contents: write
+
+jobs:
+  lockfile:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: Regenerate reproducible npm lockfile
+        run: npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Commit only the generated lockfile
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: lock expo-sqlite for SDK 57"
+            git push
+          fi

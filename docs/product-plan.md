@@ -65,7 +65,7 @@ Profile/Settings from the Home header. The active workout opens a dedicated scre
 ## Data and architecture
 
 - Keep Expo SDK 57 / React Native 0.86 until a verified upgrade is needed; TypeScript and Expo Router remain the main stack.
-- Group 1 uses the existing AsyncStorage data provider as-is. **Group 3** migrates to `expo-sqlite` with transactions, versioned migrations, a domain repository layer, indexes and integrity checks.
+- Group 3 uses `expo-sqlite`, transactional writes, versioned migrations, repository interfaces and integrity checks; AsyncStorage remains a read-only legacy source.
 - Domain modules: `training`, `activity`, `nutrition`, `hydration`, `wellbeing`, `measurements`, `goals`, `settings`. Share numeric-unit/date utilities but keep modules independent.
 - Store weights internally in kg and energy in kcal, displaying selected units after conversion. Food servings should preserve both the entered quantity/unit and the normalized nutrient snapshot.
 - A completed workout is an immutable historical record by default; later edits are explicit. Deleting or changing a template must not rewrite history.
@@ -142,6 +142,19 @@ This group does not implement nutrition storage, cardio tracking, routines or SQ
 
 ### Quality gate
 TypeScript, domain and design-token unit tests, Expo dependency checks, and GitHub Actions must pass. Emulator and device usability requires a separate smoke test and is **not** considered verified by CI alone.
+
+## Group 3: SQLite Data Layer
+
+### Implemented
+- [x] Expo SQLite persistence adapter, versioned schema and indexed relational workout tables.
+- [x] Transactional workout updates, deletions, snapshots and preferences.
+- [x] Validated one-time AsyncStorage import; preserve original key and prevent reimport.
+- [x] Serialized native SQLite writes with visible persistence errors.
+- [x] Real SQLite integration tests for migration, rollback and recovery.
+- [ ] Verify final CI and Expo compatibility on `main`.
+- [ ] Run Android/iOS on-device migration smoke tests.
+
+Group 5 will harden active session persistence when the app backgrounds or is force-closed.
 
 ## Versioning
 
