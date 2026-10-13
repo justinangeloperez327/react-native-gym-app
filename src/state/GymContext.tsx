@@ -1,16 +1,21 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { openGymRepository } from '@/src/data/sqlite-native';
+import { canLogRepetitions, findExercise, hasExerciseName, normalizeExerciseInput } from '@/src/data/exercises';
 import { emptyGymData, LEGACY_KEY } from '@/src/data/legacy';
 import type { GymRepository } from '@/src/data/gym-repository';
 import { createId } from '@/src/lib/workouts';
-import type { GymData, Preferences, TrainingSet, Workout, WorkoutMovement } from '@/src/types/gym';
+import type { Exercise, ExerciseInput, GymData, Preferences, TrainingSet, Workout, WorkoutMovement } from '@/src/types/gym';
 
 type GymContextValue = {
   ready: boolean;
   error: string | null;
   workouts: Workout[];
   preferences: Preferences;
+  customExercises: Exercise[];
+  createCustomExercise: (input: ExerciseInput) => Promise<Exercise>;
+  updateCustomExercise: (id: string, input: ExerciseInput) => Promise<void>;
+  archiveCustomExercise: (id: string) => Promise<void>;
   startWorkout: () => string;
   addMovement: (workoutId: string, exerciseId: string) => void;
   addSet: (workoutId: string, movementId: string) => void;
@@ -33,6 +38,8 @@ export function GymProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<GymData>(emptyGymData);
+  const [customExercises, setCustomExercises] = useState<Exercise[]>([]);
+  const customRef = useRef<Exercise[]>([]);
   const latestRef = useRef<GymData>(data);
   const repositoryRef = useRef<GymRepository | null>(null);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
@@ -45,10 +52,13 @@ export function GymProvider({ children }: { children: ReactNode }) {
         const repository = await openGymRepository();
         await repository.initialize(() => AsyncStorage.getItem(LEGACY_KEY));
         const restored = await repository.readSnapshot();
+        const savedExercises = await repository.readCustomExercises();
         if (!mountedRef.current) return;
         repositoryRef.current = repository;
         latestRef.current = restored;
         setData(restored);
+        customRef.current = savedExercises;
+        setCustomExercises(savedExercises);
         setReady(true);
       } catch (cause) {
         if (!mountedRef.current) return;
@@ -74,6 +84,58 @@ export function GymProvider({ children }: { children: ReactNode }) {
         if (mountedRef.current) setError(SAVE_ERROR);
       });
   }, []);
+
+  // A custom exercise is reflected in UI only after the SQLite transaction succeeds.
+  const commitExercise = useCallback(async (operation: (repo: GymRepository) => Promise<void>) => {
+    const repo = repositoryRef.current;
+    if (!repo) throw new Error('Exercise database is unavailable.');
+    const job = queueRef.current.then(() => operation(repo));
+    queueRef.current = job.then(() => {}, () => {});
+    try {
+      await job;
+      if (mountedRef.current) setError(null);
+    } catch (cause) {
+      if (mountedRef.current) setError(SAVE_ERROR);
+      throw cause;
+    }
+  }, []);
+
+  const createCustomExercise = useCallback(async (input: ExerciseInput): Promise<Exercise> => {
+    const normalized = normalizeExerciseInput(input);
+    if (hasExerciseName(normalized.name, customRef.current)) {
+      throw new Error('An exercise with this name already exists.');
+    }
+    const exercise: Exercise = { ...normalized, id: 'custom:' + createId(), custom: true, archived: false };
+    await commitExercise((repo) => repo.saveCustomExercise(exercise));
+    const next = [...customRef.current, exercise];
+    customRef.current = next;
+    setCustomExercises(next);
+    return exercise;
+  }, [commitExercise]);
+
+  const updateCustomExercise = useCallback(async (id: string, input: ExerciseInput): Promise<void> => {
+    const existing = customRef.current.find((exercise) => exercise.id === id);
+    if (!existing || existing.archived) throw new Error('Custom exercise unavailable.');
+    const normalized = normalizeExerciseInput(input);
+    if (hasExerciseName(normalized.name, customRef.current, id)) {
+      throw new Error('An exercise with this name already exists.');
+    }
+    const exercise = { ...existing, ...normalized };
+    await commitExercise((repo) => repo.saveCustomExercise(exercise));
+    const next = customRef.current.map((entry) => entry.id === id ? exercise : entry);
+    customRef.current = next;
+    setCustomExercises(next);
+  }, [commitExercise]);
+
+  const archiveCustomExercise = useCallback(async (id: string): Promise<void> => {
+    const existing = customRef.current.find((exercise) => exercise.id === id);
+    if (!existing || existing.archived) throw new Error('Custom exercise unavailable.');
+    await commitExercise((repo) => repo.archiveCustomExercise(id));
+    const next = customRef.current.map((entry) =>
+      entry.id === id ? { ...entry, archived: true } : entry);
+    customRef.current = next;
+    setCustomExercises(next);
+  }, [commitExercise]);
 
   const applyWorkout = useCallback((id: string, operation: (workout: Workout) => Workout) => {
     const current = latestRef.current;
@@ -105,6 +167,8 @@ export function GymProvider({ children }: { children: ReactNode }) {
   }, [persist]);
 
   const addMovement = useCallback((workoutId: string, exerciseId: string) => {
+    const exercise = findExercise(exerciseId, customRef.current);
+    if (!exercise || exercise.archived || !canLogRepetitions(exercise)) return;
     applyWorkout(workoutId, (workout) => {
       if (workout.finishedAt || workout.movements.some((m) => m.exerciseId === exerciseId)) return workout;
       const movement: WorkoutMovement = {
@@ -190,6 +254,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
   return (
     <GymContext.Provider value={{
       ready, error, workouts: data.workouts, preferences: data.preferences,
+      customExercises, createCustomExercise, updateCustomExercise, archiveCustomExercise,
       startWorkout, addMovement, addSet, updateSet, removeMovement,
       finishWorkout, deleteWorkout, updatePreferences,
     }}>
