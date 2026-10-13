@@ -1,32 +1,33 @@
 import { useColorScheme } from 'react-native';
 import { useGym } from '@/src/state/GymContext';
 
+// Semantic color roles shared by both themes.
 export const lightColors = {
-  background: '#F6F7F9',
+  background: '#F7F8FA',
   surface: '#FFFFFF',
-  text: '#15191E',
-  muted: '#66717D',
-  border: '#E2E5E9',
+  text: '#161B22',
+  muted: '#626C79',
+  border: '#E1E5E9',
   primary: '#285DCE',
   onPrimary: '#FFFFFF',
-  subtle: '#EDF3FF',
-  success: '#157A49',
-  danger: '#B93838',
+  subtle: '#EAF0FC',
+  success: '#18764C',
+  danger: '#B43232',
+  divider: '#EFF1F3',
 } as const;
-
 export const darkColors = {
-  background: '#101317',
-  surface: '#1B2026',
-  text: '#EFF2F6',
-  muted: '#A1ABB7',
-  border: '#303840',
-  primary: '#7FA8FF',
-  onPrimary: '#101317',
-  subtle: '#273449',
-  success: '#67CF9A',
-  danger: '#FF8989',
+  background: '#11151A',
+  surface: '#1B2128',
+  text: '#F0F3F7',
+  muted: '#ADB6C2',
+  border: '#343D48',
+  primary: '#89B0FF',
+  onPrimary: '#10151B',
+  subtle: '#26354A',
+  success: '#79D5A7',
+  danger: '#FF9696',
+  divider: '#2B323A',
 } as const;
-
 export function useAppTheme() {
   const system = useColorScheme();
   const { preferences } = useGym();

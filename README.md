@@ -4,18 +4,22 @@
 
 The approved product includes **workouts, cardio, nutrition, hydration, body measurements, goals and wellbeing**. The app is offline-first and will not require an account for v1.0.
 
-> The repository currently contains a working *starter implementation* of workout logging, exercise search, session history and settings. Nutrition, wellbeing and the persistent SQLite architecture are planned but **not yet implemented**.
+> The repository currently contains a working *starter implementation* with five navigation tabs, workout logging, exercise search, session history and settings. Nutrition, wellbeing and the persistent SQLite architecture are planned but **not yet implemented**.
 
 See the [approved product roadmap](docs/product-plan.md) for the scope and 15 implementation groups.
 
 ## Current features
 
+- Navigate across Home, Train, Nutrition, Progress and Library; Settings opens from the screen header.
 - Start and finish strength workouts.
 - Choose from a starter exercise library.
 - Track sets, repetitions, loads, completed sets and workout volume.
 - View workouts and training history.
 - Choose kg/lb and light/dark/system appearance.
 - Store workout data locally using AsyncStorage.
+- Compact light/dark UI primitives, shared semantic colors, and accessibility labels.
+
+The Nutrition screen is a clearly marked placeholder; it does not store or calculate meals or hydration yet.
 
 There is no authentication, backend, cloud sync or automated backup yet. Do not store secrets or credentials in AsyncStorage.
 
@@ -60,7 +64,7 @@ src/components/       Shared UI building blocks
 src/data/             Exercise catalog
 src/lib/              Workout calculations, unit conversion
 src/state/            Current AsyncStorage provider
-src/theme/            Theme values and appearance
+src/theme/            Shared UI tokens, semantic colors and appearance
 src/types/            Workout domain types
 tests/                Domain-level automated tests
 docs/                 Approved product roadmap

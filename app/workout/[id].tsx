@@ -151,7 +151,7 @@ export default function WorkoutScreen() {
       return;
     }
     finishWorkout(workout.id);
-    router.replace('/(tabs)/history');
+    router.replace('/(tabs)/progress');
   }
 
   function removeWorkout() {
@@ -162,7 +162,7 @@ export default function WorkoutScreen() {
         text: 'Delete', style: 'destructive',
         onPress: () => {
           deleteWorkout(workout.id);
-          router.replace('/(tabs)/history');
+          router.replace('/(tabs)/progress');
         },
       },
     ]);

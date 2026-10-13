@@ -1,5 +1,6 @@
+import { router } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
-import { Heading, Page, Panel, SectionTitle } from '@/src/components/ui';
+import { AppButton, Heading, Page, Panel, SectionTitle } from '@/src/components/ui';
 import { useGym } from '@/src/state/GymContext';
 import { useAppTheme } from '@/src/theme/colors';
 import type { ThemeSetting, WeightUnit } from '@/src/types/gym';
@@ -16,11 +17,12 @@ function Option<T extends string>({
   return (
     <Pressable accessibilityRole="radio" accessibilityState={{ checked: active }}
       onPress={() => onSelect(value)}
-      style={{
-        paddingVertical: 11, paddingHorizontal: 12, borderRadius: 7,
+      style={({ pressed }) => ({
+        minHeight: 44, justifyContent: 'center',
+        paddingHorizontal: 12, borderRadius: 6,
         borderColor: active ? colors.primary : colors.border, borderWidth: 1,
-        backgroundColor: active ? colors.subtle : colors.surface,
-      }}>
+        backgroundColor: active ? colors.subtle : colors.surface, opacity: pressed ? 0.7 : 1,
+      })}>
       <Text style={{ color: active ? colors.primary : colors.text, fontWeight: '600' }}>{label}</Text>
     </Pressable>
   );
@@ -31,7 +33,10 @@ export default function SettingsScreen() {
   const { colors } = useAppTheme();
   return (
     <Page>
-      <Heading title="Settings" subtitle="Make your training journal yours." />
+      <View style={{ alignSelf: 'flex-start' }}>
+        <AppButton title="Back" secondary onPress={() => router.back()} />
+      </View>
+      <Heading title="Settings" subtitle="Your training preferences" />
       <View style={{ gap: 10 }}>
         <SectionTitle>Weight unit</SectionTitle>
         <Panel>
@@ -46,7 +51,7 @@ export default function SettingsScreen() {
             </View>
           </View>
           <Text style={{ color: colors.muted, lineHeight: 19, fontSize: 13 }}>
-            Weights are stored in kilograms and converted for display to avoid rounding errors.
+            Weights are stored in kilograms and converted for display.
           </Text>
         </Panel>
       </View>
@@ -65,12 +70,12 @@ export default function SettingsScreen() {
         </Panel>
       </View>
       <View style={{ gap: 10 }}>
-        <SectionTitle>Your data</SectionTitle>
+        <SectionTitle>On-device data</SectionTitle>
         <Panel>
-          <Text style={{ color: colors.text, fontWeight: '600' }}>Saved on this device</Text>
-          <Text style={{ color: colors.muted, lineHeight: 20 }}>
-            Workout history is stored locally without an account. There is no backup or cloud sync yet.
-            Uninstalling the app or clearing app storage may permanently delete your records.
+          <Text style={{ color: colors.text, fontWeight: '600' }}>Local-first</Text>
+          <Text style={{ color: colors.muted, lineHeight: 20, fontSize: 13 }}>
+            Workout history is saved on this device. Cloud sync and backup are not available yet.
+            Removing the app or clearing its storage may permanently delete your records.
           </Text>
         </Panel>
       </View>

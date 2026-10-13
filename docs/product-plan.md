@@ -105,7 +105,7 @@ Profile/Settings from the Home header. The active workout opens a dedicated scre
 - Training functionality matures in 04–08.
 - Groups 09–12 complete the agreed full-fitness scope.
 - Groups 13–15 are mandatory for a public release rather than optional polish.
-- Each group should be a focused PR with code, tests, concise documentation and a checked CI run. Avoid adding speculative infrastructure.
+- Implement groups as reviewed, incremental commits directly to `main` (repository owner preference); every push must pass CI. Do not open PRs unless requested. Avoid speculative infrastructure.
 
 ## Group 1: Foundation
 
@@ -119,11 +119,29 @@ Profile/Settings from the Home header. The active workout opens a dedicated scre
 - [x] Explicitly target Android and iOS in Expo configuration.
 - [x] Generate/commit `package-lock.json`.
 - [x] Remove one-time lockfile bootstrapping workflow.
-- [ ] Verify final PR CI is green.
+- [x] Verify Group 1 CI is green on `main`.
 
 ### Done means
 
-`npm ci --no-audit --no-fund`, `npm run typecheck`, `npm run test` and `npm run check:expo` all succeed on the committed lockfile. No functionality regression to Home, Exercises, History, Settings or active workout. Device smoke testing follows in Group 2 and expands in Group 14.
+`npm ci --no-audit --no-fund`, `npm run typecheck`, `npm run test` and `npm run check:expo` all succeed on the committed lockfile. No functionality regression to the initial training features. Device smoke testing continues in Group 14.
+
+## Group 2: Design system and navigation
+
+### Implementation
+- [x] Replace four bottom tabs with Home, Train, Nutrition, Progress and Library.
+- [x] Move Settings to a dedicated stack route, accessible through the screen headers.
+- [x] Keep the existing workout editor and picker while rerouting completed sessions to Progress.
+- [x] Add semantic light/dark palettes, compact spacing, radii and typography tokens.
+- [x] Update shared panel, button, heading and metric components with consistent touch-target conventions.
+- [x] Display existing training metrics and history using actual saved workout data.
+- [x] Mark Nutrition as planned rather than presenting fabricated data.
+- [ ] Test on physical Android and iOS devices, including large text, screen readers and keyboard behavior.
+
+### Non-goals
+This group does not implement nutrition storage, cardio tracking, routines or SQLite migrations. Those remain in their assigned groups.
+
+### Quality gate
+TypeScript, domain and design-token unit tests, Expo dependency checks, and GitHub Actions must pass. Emulator and device usability requires a separate smoke test and is **not** considered verified by CI alone.
 
 ## Versioning
 

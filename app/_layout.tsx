@@ -8,6 +8,7 @@ import { LoadingScreen } from '@/src/components/ui';
 function Navigation() {
   const { ready, error } = useGym();
   const { colors, dark } = useAppTheme();
+
   if (!ready && !error) return <LoadingScreen />;
   if (!ready && error) {
     return (
@@ -17,11 +18,13 @@ function Navigation() {
       </View>
     );
   }
+
   return (
     <>
       <StatusBar style={dark ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.background } }}>
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="settings" />
         <Stack.Screen name="workout/[id]" />
         <Stack.Screen name="exercise-picker" />
       </Stack>
