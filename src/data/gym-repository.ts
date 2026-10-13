@@ -166,7 +166,7 @@ async function writeWorkout(tx: SqlClient, workout: Workout): Promise<void> {
     );
     for (const [sIndex, set] of movement.sets.entries()) {
       await tx.runAsync(
-        'INSERT INTO workout_sets(id, movement_id, position, reps, weight_kg, completed) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO workout_sets(id, movement_id, position, reps, weight_kg, completed) VALUES (?, ?, ?, ?, ?, ?)',
         set.id, movement.id, sIndex, set.reps, set.weightKg, set.completed ? 1 : 0,
       );
     }
