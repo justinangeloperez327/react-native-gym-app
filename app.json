@@ -2,8 +2,13 @@
   "expo": {
     "name": "Gym App",
     "slug": "react-native-gym-app",
+    "description": "Offline-first training, nutrition, and wellbeing tracking.",
     "scheme": "gymapp",
     "version": "0.1.0",
+    "platforms": [
+      "ios",
+      "android"
+    ],
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "ios": {
