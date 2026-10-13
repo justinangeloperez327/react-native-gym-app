@@ -21,25 +21,25 @@ Workout data stays on the device. The app has **no backend, cloud sync, or authe
 
 ## Start
 
-\`\`\`sh
+```sh
 npm install
 npm run start
-\`\`\`
+```
 
-Then scan the QR code with Expo Go, or run \`npm run android\` / \`npm run ios\` with an emulator configured.
+Then scan the QR code with Expo Go, or run `npm run android` / `npm run ios` with an emulator configured.
 
 ## Quality checks
 
-\`\`\`sh
+```sh
 npm run typecheck
 npx expo install --check
-\`\`\`
+```
 
-There is no lockfile in this initial bootstrap. After installing dependencies, commit the generated \`package-lock.json\` so CI can switch to \`npm ci\` for reproducible installs.
+There is no lockfile in this initial bootstrap. After installing dependencies, commit the generated `package-lock.json` so CI can switch to `npm ci` for reproducible installs.
 
 ## Project structure
 
-\`\`\`text
+```text
 app/                  Expo Router screens and layouts
 src/components/       Reusable interface components
 src/data/             Exercise catalog
@@ -48,7 +48,7 @@ src/state/            Local-first data provider and persistence
 src/theme/            Color palettes and theme selection
 src/types/            Domain models
 .github/workflows/     CI checks
-\`\`\`
+```
 
 ## Release notes
 
