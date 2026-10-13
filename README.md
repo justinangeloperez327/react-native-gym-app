@@ -98,7 +98,7 @@ The catalog contains built-in strength, bodyweight, and cardio activities, with 
 
 ## Workout persistence and recovery (Group 5)
 
-SQLite schema version 3 adds optional session and exercise notes. Workouts and their sets remain available after restarting the app, including unfinished sessions. Starting or finishing a workout waits for SQLite confirmation before navigation. Set edits use an ordered write queue, with visible **Saving / Saved / Save failed** status and an explicit **Retry save** action. After a failed write, the app attempts to repair persisted workouts using the latest in-memory state.
+SQLite schema version 3 adds optional session and exercise notes. Workouts and their sets remain available after restarting the app, including unfinished sessions. Starting or finishing a workout waits for SQLite confirmation before navigation. Valid numeric edits and notes enter an ordered write queue as they are typed, with visible **Saving / Saved / Save failed** status and an explicit **Retry save** action. After a failed write, the app attempts to repair persisted workouts using the latest in-memory state.
 
 On backgrounding, the app requests a best-effort flush, but mobile operating systems can terminate the process before writes finish. **An edit is durable only after the app shows Saved on device.** Android and iOS process-kill recovery tests are still required.
 

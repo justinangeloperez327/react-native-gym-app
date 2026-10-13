@@ -178,6 +178,7 @@ The library can describe cardio and timed activities, but actual distance/durati
 - [x] Schema version 3 with session and exercise notes, preserving existing v2 workouts.
 - [x] Previous completed-set references and copy with new, incomplete set IDs.
 - [x] Individual set removal, quick add-set duplication, and notes fields.
+- [x] Live persistence of valid numeric inputs and notes, with lightweight note-only SQL updates.
 - [x] Restore unfinished sessions from SQLite on app restart.
 - [x] Serialized writes, visible save status, full-snapshot repair and manual retry.
 - [x] Wait for committed SQLite writes before navigating after start/finish.

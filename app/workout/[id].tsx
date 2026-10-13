@@ -1,5 +1,5 @@
 import { router, useLocalSearchParams } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, Text, TextInput, View } from 'react-native';
 import { AppButton, EmptyState, Heading, Page, Panel, SectionTitle } from '@/src/components/ui';
 import { findExercise } from '@/src/data/exercises';
@@ -24,10 +24,14 @@ function SetEditor({
   const { colors } = useAppTheme();
   const [reps, setReps] = useState(String(set.reps));
   const [weight, setWeight] = useState(String(Number(toDisplayWeight(set.weightKg, unit).toFixed(1))));
+  const editing = useRef<'reps' | 'weight' | null>(null);
 
   useEffect(() => {
-    setReps(String(set.reps));
-    setWeight(String(Number(toDisplayWeight(set.weightKg, unit).toFixed(1))));
+    // Live saves must not erase partial decimal input (such as "12.") mid-edit.
+    if (editing.current !== 'reps') setReps(String(set.reps));
+    if (editing.current !== 'weight') {
+      setWeight(String(Number(toDisplayWeight(set.weightKg, unit).toFixed(1))));
+    }
   }, [set.reps, set.weightKg, unit]);
 
   function commit(extra?: Partial<TrainingSet>): boolean {
@@ -54,7 +58,13 @@ function SetEditor({
       <Text style={{ width: 24, color: colors.muted, fontSize: 13, fontWeight: '600' }}>{index + 1}</Text>
       <TextInput accessibilityLabel={'Set ' + (index + 1) + ' repetitions'}
         keyboardType="number-pad" selectTextOnFocus editable={!readOnly}
-        value={reps} onChangeText={setReps} onBlur={() => { if (!readOnly) commit(); }}
+        value={reps} onFocus={() => { editing.current = 'reps'; }}
+        onChangeText={(next) => {
+          setReps(next);
+          const parsed = Number(next);
+          if (!readOnly && next.trim() && Number.isSafeInteger(parsed) && parsed >= 0 &&
+              parsed !== set.reps) onSave({ reps: parsed });
+        }} onBlur={() => { editing.current = null; if (!readOnly) commit(); }}
         style={{
           flex: 1, textAlign: 'center', minHeight: 44, borderRadius: 6, borderWidth: 1,
           borderColor: colors.border, backgroundColor: colors.background, color: colors.text,
@@ -62,7 +72,15 @@ function SetEditor({
       />
       <TextInput accessibilityLabel={'Set ' + (index + 1) + ' weight in ' + unit}
         keyboardType="decimal-pad" selectTextOnFocus editable={!readOnly}
-        value={weight} onChangeText={setWeight} onBlur={() => { if (!readOnly) commit(); }}
+        value={weight} onFocus={() => { editing.current = 'weight'; }}
+        onChangeText={(next) => {
+          setWeight(next);
+          const parsed = Number(next);
+          if (!readOnly && next.trim() && Number.isFinite(parsed) && parsed >= 0 &&
+              Math.abs(toKg(parsed, unit) - set.weightKg) > 0.00001) {
+            onSave({ weightKg: toKg(parsed, unit) });
+          }
+        }} onBlur={() => { editing.current = null; if (!readOnly) commit(); }}
         style={{
           flex: 1, textAlign: 'center', minHeight: 44, borderRadius: 6, borderWidth: 1,
           borderColor: colors.border, backgroundColor: colors.background, color: colors.text,
@@ -162,7 +180,10 @@ function MovementEditor({
       <Text style={{ color: colors.muted, fontSize: 13 }}>Exercise notes</Text>
       <TextInput accessibilityLabel={'Notes for ' + (exercise?.name ?? 'exercise')}
         multiline maxLength={2000} editable={!readOnly} placeholder="Technique, form, or reminders"
-        placeholderTextColor={colors.muted} value={notes} onChangeText={setNotes}
+        placeholderTextColor={colors.muted} value={notes} onChangeText={(value) => {
+          setNotes(value);
+          if (!readOnly) setMovementNotes(workout.id, movement.id, value);
+        }}
         onBlur={() => { if (!readOnly) setMovementNotes(workout.id, movement.id, notes); }}
         style={{
           minHeight: 54, borderColor: colors.border, borderWidth: 1, borderRadius: 6,
@@ -289,7 +310,10 @@ export default function WorkoutScreen() {
       <View style={{ gap: 8 }}>
         <SectionTitle>Session notes</SectionTitle>
         <TextInput accessibilityLabel="Workout notes" placeholder="How did this session feel?"
-          placeholderTextColor={colors.muted} value={notes} onChangeText={setNotes}
+          placeholderTextColor={colors.muted} value={notes} onChangeText={(value) => {
+            setNotes(value);
+            if (!readOnly) setWorkoutNotes(workout.id, value);
+          }}
           multiline maxLength={4000} editable={!readOnly}
           onBlur={() => { if (!readOnly) setWorkoutNotes(workout.id, notes); }}
           style={{

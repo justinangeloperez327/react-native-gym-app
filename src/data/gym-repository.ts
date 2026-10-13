@@ -166,6 +166,20 @@ export class GymRepository {
     });
   }
 
+  async updateWorkoutNotes(id: string, notes: string): Promise<void> {
+    if (notes.length > 4000) throw new Error('Workout notes exceed the supported length');
+    await this.db.withExclusiveTransactionAsync(async (tx) => {
+      await tx.runAsync('UPDATE workouts SET notes = ? WHERE id = ?', notes, id);
+    });
+  }
+
+  async updateMovementNotes(id: string, notes: string): Promise<void> {
+    if (notes.length > 2000) throw new Error('Exercise notes exceed the supported length');
+    await this.db.withExclusiveTransactionAsync(async (tx) => {
+      await tx.runAsync('UPDATE workout_movements SET notes = ? WHERE id = ?', notes, id);
+    });
+  }
+
   async upsertWorkout(workout: Workout): Promise<void> {
     // Enforce domain validity before changing persistent state.
     if (!isGymData({ version: 1, workouts: [workout], preferences: emptyGymData().preferences })) {

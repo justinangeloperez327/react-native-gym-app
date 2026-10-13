@@ -216,7 +216,11 @@ export function GymProvider({ children }: { children: ReactNode }) {
     setCustomExercises(next);
   }, [commitExercise]);
 
-  const applyWorkout = useCallback((id: string, operation: (workout: Workout) => Workout) => {
+  const applyWorkout = useCallback((
+    id: string,
+    operation: (workout: Workout) => Workout,
+    writer?: (repo: GymRepository, next: Workout) => Promise<void>,
+  ) => {
     const current = latestRef.current;
     const index = current.workouts.findIndex((workout) => workout.id === id);
     if (index < 0) return;
@@ -228,7 +232,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
     const snapshot: GymData = { ...current, workouts };
     latestRef.current = snapshot;
     setData(snapshot);
-    queueOptimistic((repo) => repo.upsertWorkout(next));
+    queueOptimistic((repo) => writer ? writer(repo, next) : repo.upsertWorkout(next));
   }, [queueOptimistic]);
 
   const startWorkout = useCallback(async (): Promise<string> => {
@@ -329,7 +333,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
     applyWorkout(workoutId, (workout) => {
       if (workout.finishedAt || (workout.notes ?? '') === notes) return workout;
       return { ...workout, notes: notes.slice(0, 4000) };
-    });
+    }, (repo, next) => repo.updateWorkoutNotes(workoutId, next.notes ?? ''));
   }, [applyWorkout]);
 
   const setMovementNotes = useCallback((workoutId: string, movementId: string, notes: string) => {
@@ -339,6 +343,9 @@ export function GymProvider({ children }: { children: ReactNode }) {
       return { ...workout, movements: workout.movements.map((m) => m.id === movementId
         ? { ...m, notes: notes.slice(0, 2000) }
         : m) };
+    }, (repo, next) => {
+      const movement = next.movements.find((m) => m.id === movementId);
+      return repo.updateMovementNotes(movementId, movement?.notes ?? '');
     });
   }, [applyWorkout]);
 

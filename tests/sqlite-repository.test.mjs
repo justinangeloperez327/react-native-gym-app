@@ -320,3 +320,22 @@ test('failed v3 migration rolls back and retains v2 schema plus existing workout
     assert.equal((await db.getFirstAsync('PRAGMA table_info(workout_movements)'))?.name, 'id');
   } finally { db.close(); }
 });
+
+
+test('live note updates do not rewrite or reorder sets', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => null);
+    await repo.upsertWorkout(sample().workouts[0]);
+    await repo.updateWorkoutNotes('workout-1', 'Session note in progress.');
+    await repo.updateMovementNotes('movement-1', 'Maintain control.');
+    const restored = (await repo.readSnapshot()).workouts[0];
+    assert.equal(restored.notes, 'Session note in progress.');
+    assert.equal(restored.movements[0].notes, 'Maintain control.');
+    assert.deepEqual(restored.movements[0].sets, sample().workouts[0].movements[0].sets);
+    assert.equal((await db.getFirstAsync('SELECT COUNT(*) AS n FROM workout_sets')).n, 2);
+    await assert.rejects(repo.updateWorkoutNotes('workout-1', 'x'.repeat(4001)), /length/);
+    await assert.rejects(repo.updateMovementNotes('movement-1', 'x'.repeat(2001)), /length/);
+  } finally { db.close(); }
+});
