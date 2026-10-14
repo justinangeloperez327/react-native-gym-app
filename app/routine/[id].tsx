@@ -75,7 +75,7 @@ export default function RoutineEditor() {
     setBusy(true);
     setError(null);
     try {
-      const copy = await duplicateRoutine(current.id);
+      const copy = await duplicateRoutine(editor.id);
       router.replace({ pathname: '/routine/[id]', params: { id: copy.id } });
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Unable to duplicate routine');
@@ -105,7 +105,7 @@ export default function RoutineEditor() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: () => {
         setBusy(true);
-        void deleteRoutine(current.id)
+        void deleteRoutine(editor.id)
           .then(() => router.replace('/(tabs)/train'))
           .catch(cause => setError(cause instanceof Error ? cause.message : 'Unable to delete routine'))
           .finally(() => setBusy(false));
