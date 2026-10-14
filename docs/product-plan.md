@@ -200,7 +200,8 @@ The library can describe cardio and timed activities, but actual distance/durati
 - [x] Import three optional starter programs, with no automatic onboarding data.
 - [x] Start routines as fully independent saved workout sessions.
 - [x] Add integration and domain tests for migrations, rollbacks, scheduling and session instantiation.
-- [ ] Verify CI on main and smoke test on real Android/iOS devices.
+- [x] Verify CI on main.
+- [ ] Smoke test routine creation, editing, scheduling and launching on Android/iOS devices.
 
 **Scope:** Only repetition-based templates can start sessions. Cardio, timers, and distance targets remain in Group 7. Scheduling is recurring weekday guidance, not a notification service.
 
