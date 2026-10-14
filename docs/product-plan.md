@@ -189,6 +189,21 @@ The library can describe cardio and timed activities, but actual distance/durati
 
 **Limitations:** An abrupt process kill can interrupt an async save; the edit is durable only after the app confirms it. Group 14 completes broader crash-recovery and device testing.
 
+## Group 6: Training Routines and Scheduling
+
+### Implemented
+- [x] SQLite migration version 4 for routine templates, exercise targets, and weekly weekday assignments.
+- [x] Create and edit routines with ordered exercises, target sets/reps/weight and instructions.
+- [x] Schedule one or more routines on any day of the weekly cycle (device-local Sunday–Saturday).
+- [x] Duplicate routines with unique identifiers and without copying weekday assignments.
+- [x] Delete routines without affecting completed or active workout history.
+- [x] Import three optional starter programs, with no automatic onboarding data.
+- [x] Start routines as fully independent saved workout sessions.
+- [x] Add integration and domain tests for migrations, rollbacks, scheduling and session instantiation.
+- [ ] Verify CI on main and smoke test on real Android/iOS devices.
+
+**Scope:** Only repetition-based templates can start sessions. Cardio, timers, and distance targets remain in Group 7. Scheduling is recurring weekday guidance, not a notification service.
+
 ## Versioning
 
 Keep the app prerelease until Group 15. Version `0.1.0` identifies the current development baseline; it is not a claim of production readiness. Publish v1.0.0 only after the complete fitness core and quality gates above are satisfied.

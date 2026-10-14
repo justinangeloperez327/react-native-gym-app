@@ -16,6 +16,7 @@ See the [approved product roadmap](docs/product-plan.md) for the scope and 15 im
 - Create, edit and archive custom exercises in SQLite without losing historical workout references.
 - Track sets, repetitions, loads, completed sets and workout volume.
 - Resume unfinished sessions, write workout/exercise notes, review and copy previous sets, and remove individual sets.
+- Build reusable workout routines with ordered exercises, target sets/reps/weight and recurring weekly schedules.
 - See local save status and retry failed writes; workout start/finish waits for SQLite confirmation.
 - View workouts and training history.
 - Choose kg/lb and light/dark/system appearance.
@@ -103,3 +104,9 @@ SQLite schema version 3 adds optional session and exercise notes. Workouts and t
 On backgrounding, the app requests a best-effort flush, but mobile operating systems can terminate the process before writes finish. **An edit is durable only after the app shows Saved on device.** Android and iOS process-kill recovery tests are still required.
 
 Previous-performance references use the latest *completed* earlier workout for the same exercise. Copying previous sets produces fresh incomplete set IDs without modifying history.
+
+## Routines and weekly scheduling (Group 6)
+
+From **Train**, create a personal routine or import one of three starter programs. Edit its name, instructions, exercises, order, targets, and days of the week (Sunday–Saturday, device-local). The Train screen highlights templates assigned for the current weekday and lets you start them.
+
+Starting a routine creates a **new saved workout** with fresh movement/set IDs and incomplete sets; the template remains unchanged. You can reuse, duplicate (without copying its schedule), or delete a routine without deleting recorded sessions. All templates and weekly assignments live in SQLite schema version 4. Assignments do not create notifications or automatically launch a workout; reminder support is outside the current scope. Only repetition-based routines can be executed until cardio/timed logging arrives in Group 7.

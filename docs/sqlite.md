@@ -47,3 +47,11 @@ The third schema version adds `notes TEXT NOT NULL DEFAULT ''` to `workouts` and
 New workout creation and workout completion wait for their SQLite transactions to succeed before navigating away. Intermediate set edits and notes enter a serialized write queue as valid values are typed; note-only updates use targeted SQL instead of rewriting all sets; the UI exposes save status and a retry control. If a write fails, the next save or manual retry attempts a full workout snapshot repair. The background lifecycle requests a best-effort flush, which cannot guarantee that a force-terminated process finishes writing.
 
 Previous-performance lookups only reference earlier completed sessions and never modify old workouts.
+
+## Schema version 4 — reusable routines
+
+`routine_templates` stores local routine identity, descriptions and timestamps. `routine_exercises` stores ordered exercise IDs plus target sets, repetitions and weight in kilograms. `routine_weekdays` assigns weekday integers 0–6 (Sunday–Saturday). All child rows cascade when a template is deleted.
+
+Each save replaces a routine's exercises and weekday assignments within a single transaction. On error, SQLite rolls the entire change back. Starting a routine creates a new workout with independent movement and set identifiers. Existing workout records do not depend on the template remaining present.
+
+Starter programs are available as user-initiated copies and are never installed automatically. Scheduling does not implement notifications.

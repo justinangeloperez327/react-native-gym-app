@@ -6,7 +6,8 @@ import { canLogRepetitions, findExercise, hasExerciseName, normalizeExerciseInpu
 import { emptyGymData, LEGACY_KEY } from '@/src/data/legacy';
 import type { GymRepository } from '@/src/data/gym-repository';
 import { createId, previousCompletedSets } from '@/src/lib/workouts';
-import type { Exercise, ExerciseInput, GymData, Preferences, TrainingSet, Workout, WorkoutMovement } from '@/src/types/gym';
+import { buildStarterRoutine, createRoutineTemplate, duplicateRoutineTemplate, routineToWorkout, validateRoutine } from '@/src/data/routines';
+import type { Exercise, ExerciseInput, GymData, Preferences, TrainingSet, Workout, WorkoutMovement, RoutineTemplate } from '@/src/types/gym';
 
 type GymContextValue = {
   ready: boolean;
@@ -16,6 +17,13 @@ type GymContextValue = {
   workouts: Workout[];
   preferences: Preferences;
   customExercises: Exercise[];
+  routines: RoutineTemplate[];
+  saveRoutine: (routine: RoutineTemplate) => Promise<void>;
+  createRoutine: (name?: string) => Promise<RoutineTemplate>;
+  importStarterRoutine: (key: string) => Promise<RoutineTemplate>;
+  duplicateRoutine: (id: string) => Promise<RoutineTemplate>;
+  deleteRoutine: (id: string) => Promise<void>;
+  startRoutineWorkout: (routineId: string) => Promise<string>;
   createCustomExercise: (input: ExerciseInput) => Promise<Exercise>;
   updateCustomExercise: (id: string, input: ExerciseInput) => Promise<void>;
   archiveCustomExercise: (id: string) => Promise<void>;
@@ -47,6 +55,8 @@ export function GymProvider({ children }: { children: ReactNode }) {
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [data, setData] = useState<GymData>(emptyGymData);
   const [customExercises, setCustomExercises] = useState<Exercise[]>([]);
+  const [routines, setRoutines] = useState<RoutineTemplate[]>([]);
+  const routinesRef = useRef<RoutineTemplate[]>([]);
   const customRef = useRef<Exercise[]>([]);
   const latestRef = useRef<GymData>(data);
   const repositoryRef = useRef<GymRepository | null>(null);
@@ -64,12 +74,15 @@ export function GymProvider({ children }: { children: ReactNode }) {
         await repository.initialize(() => AsyncStorage.getItem(LEGACY_KEY));
         const restored = await repository.readSnapshot();
         const savedExercises = await repository.readCustomExercises();
+        const savedRoutines = await repository.readRoutines();
         if (!mountedRef.current) return;
         repositoryRef.current = repository;
         latestRef.current = restored;
         setData(restored);
         customRef.current = savedExercises;
         setCustomExercises(savedExercises);
+        routinesRef.current = savedRoutines;
+        setRoutines(savedRoutines);
         setReady(true);
       } catch (cause) {
         if (!mountedRef.current) return;
@@ -215,6 +228,76 @@ export function GymProvider({ children }: { children: ReactNode }) {
     customRef.current = next;
     setCustomExercises(next);
   }, [commitExercise]);
+
+  const commitRoutine = useCallback(async (template: RoutineTemplate): Promise<void> => {
+    validateRoutine(template);
+    for (const movement of template.exercises) {
+      const exercise = findExercise(movement.exerciseId, customRef.current);
+      if (!exercise || exercise.archived || !canLogRepetitions(exercise)) {
+        throw new Error('This routine contains an unavailable or unsupported exercise.');
+      }
+    }
+    await commitConfirmed((repo) => repo.saveRoutine(template));
+    const next = [template, ...routinesRef.current.filter((r) => r.id !== template.id)];
+    routinesRef.current = next;
+    setRoutines(next);
+  }, [commitConfirmed]);
+
+  const createRoutine = useCallback(async (name = 'New routine'): Promise<RoutineTemplate> => {
+    const routine = createRoutineTemplate(name);
+    await commitRoutine(routine);
+    return routine;
+  }, [commitRoutine]);
+
+  const importStarterRoutine = useCallback(async (key: string): Promise<RoutineTemplate> => {
+    const routine = buildStarterRoutine(key);
+    await commitRoutine(routine);
+    return routine;
+  }, [commitRoutine]);
+
+  const saveRoutine = useCallback(async (routine: RoutineTemplate): Promise<void> => {
+    const current = routinesRef.current.find((r) => r.id === routine.id);
+    if (!current) throw new Error('Routine not found.');
+    const updated: RoutineTemplate = { ...routine, createdAt: current.createdAt, updatedAt: new Date().toISOString() };
+    await commitRoutine(updated);
+  }, [commitRoutine]);
+
+  const duplicateRoutine = useCallback(async (id: string): Promise<RoutineTemplate> => {
+    const existing = routinesRef.current.find((r) => r.id === id);
+    if (!existing) throw new Error('Routine not found.');
+    const copy = duplicateRoutineTemplate(existing);
+    await commitRoutine(copy);
+    return copy;
+  }, [commitRoutine]);
+
+  const deleteRoutine = useCallback(async (id: string): Promise<void> => {
+    if (!routinesRef.current.some((r) => r.id === id)) throw new Error('Routine not found.');
+    await commitConfirmed((repo) => repo.deleteRoutine(id));
+    const next = routinesRef.current.filter((r) => r.id !== id);
+    routinesRef.current = next;
+    setRoutines(next);
+  }, [commitConfirmed]);
+
+  const startRoutineWorkout = useCallback(async (routineId: string): Promise<string> => {
+    const routine = routinesRef.current.find((r) => r.id === routineId);
+    if (!routine) throw new Error('Routine not found.');
+    // Validate at execution time: an archived custom exercise must not create
+    // a workout with an unknown movement.
+    for (const movement of routine.exercises) {
+      const exercise = findExercise(movement.exerciseId, customRef.current);
+      if (!exercise || exercise.archived || !canLogRepetitions(exercise)) {
+        throw new Error('This routine contains an archived or unsupported exercise.');
+      }
+    }
+    const workout = routineToWorkout(routine);
+    await commitConfirmed((repo) => repo.upsertWorkout(workout));
+    const snapshot: GymData = {
+      ...latestRef.current, workouts: [workout, ...latestRef.current.workouts],
+    };
+    latestRef.current = snapshot;
+    setData(snapshot);
+    return workout.id;
+  }, [commitConfirmed]);
 
   const applyWorkout = useCallback((
     id: string,
@@ -394,6 +477,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
     <GymContext.Provider value={{
       ready, error, saveStatus, retrySave, workouts: data.workouts, preferences: data.preferences,
       customExercises, createCustomExercise, updateCustomExercise, archiveCustomExercise,
+      routines, saveRoutine, createRoutine, importStarterRoutine, duplicateRoutine, deleteRoutine, startRoutineWorkout,
       startWorkout, addMovement, addSet, removeSet, copyPreviousSets,
       setWorkoutNotes, setMovementNotes, updateSet, removeMovement,
       finishWorkout, deleteWorkout, updatePreferences,

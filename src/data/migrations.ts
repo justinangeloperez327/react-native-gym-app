@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 
 /** PRAGMA user_version advances atomically with the DDL transaction. */
 export const MIGRATION_V1 = [
@@ -25,4 +25,13 @@ export const MIGRATION_V3 = [
   "ALTER TABLE workouts ADD COLUMN notes TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE workout_movements ADD COLUMN notes TEXT NOT NULL DEFAULT ''",
   'PRAGMA user_version = 3',
+].join(';\n') + ';';
+
+export const MIGRATION_V4 = [
+  "CREATE TABLE routine_templates (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, description TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL, updated_at TEXT NOT NULL)",
+  "CREATE TABLE routine_exercises (id TEXT PRIMARY KEY NOT NULL, routine_id TEXT NOT NULL REFERENCES routine_templates(id) ON DELETE CASCADE, exercise_id TEXT NOT NULL, position INTEGER NOT NULL CHECK(position >= 0), target_sets INTEGER NOT NULL CHECK(target_sets BETWEEN 1 AND 20), target_reps INTEGER NOT NULL CHECK(target_reps BETWEEN 1 AND 1000), target_weight_kg REAL NOT NULL CHECK(target_weight_kg >= 0), UNIQUE(routine_id, position), UNIQUE(routine_id, exercise_id))",
+  "CREATE INDEX idx_routine_exercises_owner ON routine_exercises(routine_id)",
+  "CREATE TABLE routine_weekdays (routine_id TEXT NOT NULL REFERENCES routine_templates(id) ON DELETE CASCADE, weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6), PRIMARY KEY(routine_id, weekday))",
+  "CREATE INDEX idx_routine_weekdays_day ON routine_weekdays(weekday)",
+  'PRAGMA user_version = 4',
 ].join(';\n') + ';';

@@ -1,7 +1,8 @@
 import { emptyGymData, isGymData, parseLegacy } from './legacy.ts';
-import { MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, SCHEMA_VERSION } from './migrations.ts';
+import { MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, SCHEMA_VERSION } from './migrations.ts';
 import { normalizeExerciseInput } from './exercises.ts';
-import type { GymData, Preferences, Workout, WorkoutMovement, TrainingSet, Exercise } from '../types/gym';
+import { validateRoutine } from './routines.ts';
+import type { GymData, Preferences, Workout, WorkoutMovement, TrainingSet, Exercise, RoutineTemplate, RoutineExercise } from '../types/gym';
 
 export type SqlParam = string | number | null;
 
@@ -27,6 +28,9 @@ type PrefRow = { weight_unit: string; theme: string };
 type WorkoutRow = { id: string; started_at: string; finished_at: string | null; notes: string };
 type MovementRow = { id: string; workout_id: string; exercise_id: string; position: number; notes: string };
 type ExerciseRow = { id: string; name: string; muscle: Exercise['muscle']; equipment: string; kind: Exercise['kind']; tracking: Exercise['tracking']; archived: number };
+type RoutineRow = { id: string; name: string; description: string; created_at: string; updated_at: string };
+type RoutineExerciseRow = { id: string; routine_id: string; exercise_id: string; position: number; target_sets: number; target_reps: number; target_weight_kg: number };
+type RoutineDayRow = { routine_id: string; weekday: number };
 type SetRow = { id: string; movement_id: string; position: number; reps: number; weight_kg: number; completed: number };
 
 const LEGACY_STATUS = 'legacy_async_storage_v1';
@@ -65,6 +69,12 @@ export class GymRepository {
     if (currentVersion < 3) {
       await this.db.withExclusiveTransactionAsync(async (tx) => {
         await tx.execAsync(MIGRATION_V3);
+      });
+    }
+
+    if (currentVersion < 4) {
+      await this.db.withExclusiveTransactionAsync(async (tx) => {
+        await tx.execAsync(MIGRATION_V4);
       });
     }
 
@@ -177,6 +187,63 @@ export class GymRepository {
     if (notes.length > 2000) throw new Error('Exercise notes exceed the supported length');
     await this.db.withExclusiveTransactionAsync(async (tx) => {
       await tx.runAsync('UPDATE workout_movements SET notes = ? WHERE id = ?', notes, id);
+    });
+  }
+
+  async readRoutines(): Promise<RoutineTemplate[]> {
+    const rows = await this.db.getAllAsync(
+      'SELECT id, name, description, created_at, updated_at FROM routine_templates ORDER BY updated_at DESC, id',
+    ) as RoutineRow[];
+    const movements = await this.db.getAllAsync(
+      'SELECT id, routine_id, exercise_id, position, target_sets, target_reps, target_weight_kg FROM routine_exercises ORDER BY routine_id, position',
+    ) as RoutineExerciseRow[];
+    const days = await this.db.getAllAsync(
+      'SELECT routine_id, weekday FROM routine_weekdays ORDER BY weekday',
+    ) as RoutineDayRow[];
+    const exercisesByRoutine = new Map<string, RoutineExercise[]>();
+    const daysByRoutine = new Map<string, number[]>();
+    for (const row of movements) {
+      const list = exercisesByRoutine.get(row.routine_id) ?? [];
+      list.push({ id: row.id, exerciseId: row.exercise_id, sets: row.target_sets, reps: row.target_reps, weightKg: row.target_weight_kg });
+      exercisesByRoutine.set(row.routine_id, list);
+    }
+    for (const row of days) {
+      const list = daysByRoutine.get(row.routine_id) ?? [];
+      list.push(row.weekday);
+      daysByRoutine.set(row.routine_id, list);
+    }
+    return rows.map((row) => ({
+      id: row.id, name: row.name, description: row.description,
+      createdAt: row.created_at, updatedAt: row.updated_at,
+      days: daysByRoutine.get(row.id) ?? [],
+      exercises: exercisesByRoutine.get(row.id) ?? [],
+    }));
+  }
+
+  async saveRoutine(routine: RoutineTemplate): Promise<void> {
+    validateRoutine(routine);
+    await this.db.withExclusiveTransactionAsync(async (tx) => {
+      await tx.runAsync(
+        'INSERT INTO routine_templates (id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, description=excluded.description, updated_at=excluded.updated_at',
+        routine.id, routine.name.trim(), routine.description.trim(), routine.createdAt, routine.updatedAt,
+      );
+      await tx.runAsync('DELETE FROM routine_exercises WHERE routine_id = ?', routine.id);
+      await tx.runAsync('DELETE FROM routine_weekdays WHERE routine_id = ?', routine.id);
+      for (const [position, movement] of routine.exercises.entries()) {
+        await tx.runAsync(
+          'INSERT INTO routine_exercises (id, routine_id, exercise_id, position, target_sets, target_reps, target_weight_kg) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          movement.id, routine.id, movement.exerciseId, position, movement.sets, movement.reps, movement.weightKg,
+        );
+      }
+      for (const day of routine.days) {
+        await tx.runAsync('INSERT INTO routine_weekdays (routine_id, weekday) VALUES (?, ?)', routine.id, day);
+      }
+    });
+  }
+
+  async deleteRoutine(id: string): Promise<void> {
+    await this.db.withExclusiveTransactionAsync(async (tx) => {
+      await tx.runAsync('DELETE FROM routine_templates WHERE id = ?', id);
     });
   }
 

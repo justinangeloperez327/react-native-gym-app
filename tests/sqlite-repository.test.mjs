@@ -58,7 +58,7 @@ test('initialization creates foreign-keyed schema once and defaults', async () =
   try {
     const repo = new GymRepository(db);
     await repo.initialize(async () => null);
-    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 3);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 4);
     assert.equal((await db.getFirstAsync('PRAGMA foreign_keys')).foreign_keys, 1);
     assert.deepEqual(await repo.readSnapshot(), {
       version: 1, workouts: [], preferences: { unit: 'kg', theme: 'system' },
@@ -181,14 +181,14 @@ test('newer database schema is never downgraded', async () => {
 });
 
 
-test('v1 to v3 migration preserves existing workout history and preference choices', async () => {
+test('v1 to v4 migration preserves existing workout history and preference choices', async () => {
   const db = new NativeTestDatabase();
   try {
     const repo = new GymRepository(db);
     await repo.initialize(async () => JSON.stringify(sample()));
-    await db.execAsync('DROP INDEX idx_custom_exercises_name; DROP INDEX idx_custom_exercises_kind; DROP TABLE custom_exercises; ALTER TABLE workouts DROP COLUMN notes; ALTER TABLE workout_movements DROP COLUMN notes; PRAGMA user_version = 1;');
+    await db.execAsync('DROP TABLE routine_weekdays; DROP TABLE routine_exercises; DROP TABLE routine_templates; DROP INDEX idx_custom_exercises_name; DROP INDEX idx_custom_exercises_kind; DROP TABLE custom_exercises; ALTER TABLE workouts DROP COLUMN notes; ALTER TABLE workout_movements DROP COLUMN notes; PRAGMA user_version = 1;');
     await repo.initialize(async () => { throw new Error('Legacy data should not be read twice'); });
-    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 3);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 4);
     assert.deepEqual(await repo.readSnapshot(), sample());
     assert.deepEqual(await repo.readCustomExercises(), []);
   } finally { db.close(); }
@@ -248,7 +248,7 @@ test('failed migration to v2 rolls back version and does not delete workouts', a
   try {
     const repo = new GymRepository(db);
     await repo.initialize(async () => JSON.stringify(sample()));
-    await db.execAsync('DROP INDEX idx_custom_exercises_name; DROP INDEX idx_custom_exercises_kind; DROP TABLE custom_exercises; PRAGMA user_version = 1;');
+    await db.execAsync('DROP TABLE routine_weekdays; DROP TABLE routine_exercises; DROP TABLE routine_templates; DROP INDEX idx_custom_exercises_name; DROP INDEX idx_custom_exercises_kind; DROP TABLE custom_exercises; PRAGMA user_version = 1;');
     // A malformed old table causes v2's name index to fail inside its transaction.
     await db.execAsync('CREATE TABLE custom_exercises (unrelated TEXT);');
     await assert.rejects(repo.initialize(async () => null), /no such column|name/i);
@@ -274,7 +274,7 @@ test('upgrading an actual v2 database adds note fields without rewriting workout
     const repo = new GymRepository(db);
     await repo.initialize(async () => null);
     const saved = await repo.readSnapshot();
-    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 3);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 4);
     assert.equal(saved.workouts[0].id, 'old-session');
     assert.equal(saved.workouts[0].movements[0].sets[0].weightKg, 80);
     assert.equal(saved.workouts[0].notes, undefined);
@@ -337,5 +337,114 @@ test('live note updates do not rewrite or reorder sets', async () => {
     assert.equal((await db.getFirstAsync('SELECT COUNT(*) AS n FROM workout_sets')).n, 2);
     await assert.rejects(repo.updateWorkoutNotes('workout-1', 'x'.repeat(4001)), /length/);
     await assert.rejects(repo.updateMovementNotes('movement-1', 'x'.repeat(2001)), /length/);
+  } finally { db.close(); }
+});
+
+
+test('v3 to v4 schema migration preserves existing workout data and preferences', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const { MIGRATION_V1, MIGRATION_V2, MIGRATION_V3 } = await import('../src/data/migrations.ts');
+    await db.execAsync('PRAGMA foreign_keys = ON;');
+    await db.execAsync(MIGRATION_V1);
+    await db.execAsync(MIGRATION_V2);
+    await db.execAsync(MIGRATION_V3);
+    const repo = new GymRepository(db);
+    await repo.upsertWorkout(sample().workouts[0]);
+    await repo.updatePreferences(sample().preferences);
+    await repo.initialize(async () => null);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 4);
+    assert.deepEqual(await repo.readSnapshot(), sample());
+    assert.deepEqual(await repo.readRoutines(), []);
+  } finally { db.close(); }
+});
+
+test('routines and weekdays persist atomically with ordered target values', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => null);
+    const routine = {
+      id: 'routine:one', name: 'Full Body', description: 'Simple weekly session',
+      createdAt: '2026-10-13T10:00:00Z', updatedAt: '2026-10-13T10:00:00Z',
+      days: [1, 3, 5],
+      exercises: [
+        { id: 'routine-m1', exerciseId: 'squat', sets: 3, reps: 8, weightKg: 60 },
+        { id: 'routine-m2', exerciseId: 'bench-press', sets: 4, reps: 10, weightKg: 40 },
+      ],
+    };
+    await repo.saveRoutine(routine);
+    assert.deepEqual(await repo.readRoutines(), [routine]);
+    const edited = {
+      ...routine, name: 'Updated Full Body', updatedAt: '2026-10-14T10:00:00Z',
+      days: [0, 6], exercises: [routine.exercises[1]],
+    };
+    await repo.saveRoutine(edited);
+    assert.deepEqual(await repo.readRoutines(), [edited]);
+    assert.equal((await db.getFirstAsync('SELECT COUNT(*) AS n FROM routine_exercises')).n, 1);
+    assert.equal((await db.getFirstAsync('SELECT COUNT(*) AS n FROM routine_weekdays')).n, 2);
+  } finally { db.close(); }
+});
+
+test('failed routine save rolls back edits and schedule entirely', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => null);
+    const routine = {
+      id: 'routine:safe', name: 'Safe program', description: '',
+      createdAt: '2026-10-13T10:00:00Z', updatedAt: '2026-10-13T10:00:00Z',
+      days: [2],
+      exercises: [{ id: 'routine-e1', exerciseId: 'squat', sets: 3, reps: 10, weightKg: 20 }],
+    };
+    await repo.saveRoutine(routine);
+    db.failOn = 'INSERT INTO routine_weekdays';
+    await assert.rejects(repo.saveRoutine({ ...routine, name: 'New name', days: [1, 3] }), /Simulated/);
+    db.failOn = null;
+    assert.deepEqual(await repo.readRoutines(), [routine]);
+  } finally { db.close(); }
+});
+
+test('deleting a routine cascades schedule/exercises but never erases workout history', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => null);
+    const routine = {
+      id: 'routine:delete', name: 'Temporary plan', description: '',
+      createdAt: '2026-10-13T10:00:00Z', updatedAt: '2026-10-13T10:00:00Z',
+      days: [1, 4], exercises: [{ id: 'routine-x', exerciseId: 'bench-press', sets: 3, reps: 10, weightKg: 20 }],
+    };
+    await repo.saveRoutine(routine);
+    await repo.upsertWorkout(sample().workouts[0]);
+    await repo.deleteRoutine(routine.id);
+    assert.deepEqual(await repo.readRoutines(), []);
+    assert.deepEqual((await repo.readSnapshot()).workouts, sample().workouts);
+    assert.equal((await db.getFirstAsync('SELECT COUNT(*) AS n FROM routine_weekdays')).n, 0);
+    assert.equal((await db.getFirstAsync('SELECT COUNT(*) AS n FROM routine_exercises')).n, 0);
+  } finally { db.close(); }
+});
+
+test('invalid routine targets and duplicate exercises do not mutate SQLite state', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => null);
+    const routine = {
+      id: 'routine:invalid', name: 'Invalid plan', description: '',
+      createdAt: '2026-10-13T10:00:00Z', updatedAt: '2026-10-13T10:00:00Z',
+      days: [1, 1], exercises: [],
+    };
+    await assert.rejects(repo.saveRoutine(routine), /weekly schedule/);
+    await assert.rejects(repo.saveRoutine({
+      ...routine, days: [], exercises: [{ id: 'a', exerciseId: 'squat', sets: 0, reps: 10, weightKg: 30 }],
+    }), /exercise targets/);
+    await assert.rejects(repo.saveRoutine({
+      ...routine, days: [], exercises: [
+        { id: 'a', exerciseId: 'squat', sets: 3, reps: 8, weightKg: 0 },
+        { id: 'b', exerciseId: 'squat', sets: 4, reps: 9, weightKg: 0 },
+      ],
+    }), /unique/);
+    assert.deepEqual(await repo.readRoutines(), []);
   } finally { db.close(); }
 });

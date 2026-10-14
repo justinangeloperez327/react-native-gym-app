@@ -25,3 +25,20 @@ export type TrainingSet = { id: string; reps: number; weightKg: number; complete
 export type WorkoutMovement = { id: string; exerciseId: string; sets: TrainingSet[]; notes?: string };
 export type Workout = { id: string; startedAt: string; finishedAt: string | null; movements: WorkoutMovement[]; notes?: string };
 export type GymData = { version: 1; workouts: Workout[]; preferences: Preferences };
+
+export type RoutineExercise = {
+  id: string;
+  exerciseId: string;
+  sets: number;
+  reps: number;
+  weightKg: number;
+};
+export type RoutineTemplate = {
+  id: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  updatedAt: string;
+  days: number[]; // 0=Sunday through 6=Saturday, local device calendar
+  exercises: RoutineExercise[];
+};
