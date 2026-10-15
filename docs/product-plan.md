@@ -322,7 +322,7 @@ All observations are optional and self-reported. Missing data never counts as an
 - [x] Backward-compatible export schema v1 separate from SQLite schema v9 and legacy migrations.
 - [x] Saved data and UI state refresh only after durable restore.
 - [x] Comprehensive round-trip, invalid-payload and simulated-write-failure tests.
-- [ ] Verify CI on main.
+- [x] Verify CI on main.
 - [ ] Android/iOS share sheet, document selection, onboarding and large backup test.
 
 ### Restore policy and limitations
