@@ -217,7 +217,7 @@ The library can describe cardio and timed activities, but actual distance/durati
 - [x] Extend routine targets and workout creation to support timed and distance activities.
 - [x] Workout history cards and session summaries separate strength volume from cardio distance/time.
 - [x] Add migration, integrity, and mixed-activity calculation tests.
-- [ ] Verify CI on main.
+- [x] Verify CI on main.
 - [ ] Verify Android/iOS keyboard behavior, rest countdown on background/foreground, and native migration.
 
 **Scope limitations:** Superset group labels do not automatically alternate or schedule sets; rest timers do not send notifications and are not durable across an app process kill. Future usability tests will address these cases.
