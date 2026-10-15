@@ -123,7 +123,7 @@ export function validateBackup(input: unknown): GymBackup {
   for (const entry of backup.recoveryEntries) {
     ensure(record(entry) && typeof entry.id === 'string' &&
       typeof entry.recordedOn === 'string' && typeof entry.notes === 'string' &&
-      ['sleepMinutes', 'sleepQuality', 'energy', 'mood', 'soreness', 'stress'].every(key =>
+      (['sleepMinutes', 'sleepQuality', 'energy', 'mood', 'soreness', 'stress'] as const).every(key =>
         (entry[key] === null || typeof entry[key] === 'number') && Object.hasOwn(entry, key)),
       'invalid recovery entry');
     validateRecovery(entry);
