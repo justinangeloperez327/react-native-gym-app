@@ -41,6 +41,8 @@ Copy `release/release-evidence.example.json` to `release/release-evidence.json` 
 - The **20** passing test IDs from `docs/qa-device-matrix.md` for *each* platform. Include external screenshots and device logs with a secure QA ticket; do not commit personally identifying log captures.
 - An accessible HTTPS privacy-policy URL, verified support email, approved icons/store listing/screenshots, accurate privacy data disclosures and explicit submission approval.
 
+Before signing off, check that Android and iOS evidence references the **same complete 40-hex source commit** as the repository's current `HEAD`. Changing code after the tested build requires new builds and a fresh native QA pass. Each `buildUrl` must link to the official Expo EAS build page; recorded test dates must be real, non-future dates. The checker also rejects reserved/example privacy domains and support addresses and verifies the icon is a 1024 × 1024 PNG by its header. **These are structural checks only**; the reviewer must verify the builds, artwork, live links, dates and evidence independently. The app and package semantic versions must agree.
+
 Use `npm run check:release-config` to check build profiles at any time. **Do not use** `npm run check:release-ready` as proof of physical-device testing: it only validates the recorded human attestations. It deliberately fails with missing approvals until release preparation is complete.
 
 When QA and store documentation are fully signed off, update `app.json` and `package.json` to **1.0.0 in a dedicated reviewed release commit**, re-run the entire automated and native suite, run `npm run check:release-ready`, and then perform a separately authorized manual submission. Do not assume that passing CI authorizes deployment.

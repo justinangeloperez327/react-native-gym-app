@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -44,7 +45,9 @@ export function validateEasLink(app) {
     ? [] : ['EAS project is not linked: run eas init and commit its real projectId'];
 }
 
-export function validateReleaseEvidence(app, evidence, qaIds = DEFAULT_QA_IDS, iconExists = false) {
+// Technical checks strengthen the release gate, but cannot independently prove a
+// device test, publisher authorization, certificate ownership, or a live URL.
+export function validateReleaseEvidence(app, evidence, qaIds = DEFAULT_QA_IDS, iconExists = false, expectedCommit = null) {
   const errors = [];
   const expo = app?.expo ?? {};
   errors.push(...validateEasLink(app));
@@ -56,12 +59,12 @@ export function validateReleaseEvidence(app, evidence, qaIds = DEFAULT_QA_IDS, i
   }
   if (expo.version !== '1.0.0' || evidence.releaseVersion !== '1.0.0')
     errors.push('The app and approval record must both target v1.0.0');
-  if (typeof evidence.privacyPolicyUrl !== 'string' ||
-      !/^https:\/\/[a-z0-9.-]+(?:\/|$)/i.test(evidence.privacyPolicyUrl))
-    errors.push('An externally hosted HTTPS privacy policy URL is required');
+  if (!isPublisherHttpsUrl(evidence.privacyPolicyUrl))
+    errors.push('An externally hosted non-placeholder HTTPS privacy policy URL is required');
   if (typeof evidence.contactEmail !== 'string' ||
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(evidence.contactEmail))
-    errors.push('A verified store support contact address is required');
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(evidence.contactEmail) ||
+      isReservedHost(evidence.contactEmail.split('@')[1]))
+    errors.push('A verified non-placeholder store support contact address is required');
   for (const field of ['storeAssetsApproved', 'privacyDisclosuresApproved', 'submissionApproved']) {
     if (evidence[field] !== true) errors.push(field + ' must have documented human approval');
   }
@@ -75,8 +78,16 @@ export function validateReleaseEvidence(app, evidence, qaIds = DEFAULT_QA_IDS, i
       if (typeof record[key] !== 'string' || !record[key].trim())
         errors.push(platform + ' QA requires ' + key);
     }
-    if (typeof record?.buildUrl === 'string' && !/^https:\/\//i.test(record.buildUrl))
-      errors.push(platform + ' buildUrl must be HTTPS');
+    if (typeof record?.buildUrl === 'string' && !isEasBuildPage(record.buildUrl))
+      errors.push(platform + ' buildUrl must be an official Expo EAS build page');
+    if (typeof record?.testedCommit === 'string') {
+      if (!/^[0-9a-f]{40}$/i.test(record.testedCommit))
+        errors.push(platform + ' testedCommit must be a full 40-character Git SHA');
+      else if (expectedCommit && record.testedCommit.toLowerCase() !== expectedCommit.toLowerCase())
+        errors.push(platform + ' tested source commit does not match current HEAD');
+    }
+    if (typeof record?.testedAt === 'string' && !isPastCalendarDate(record.testedAt))
+      errors.push(platform + ' testedAt must be a valid non-future YYYY-MM-DD date');
     if (!Array.isArray(record.passedChecks) ||
         new Set(record.passedChecks).size !== record.passedChecks.length ||
         qaIds.some(id => !record.passedChecks.includes(id)))
@@ -89,6 +100,55 @@ export function validateReleaseEvidence(app, evidence, qaIds = DEFAULT_QA_IDS, i
   return errors;
 }
 
+function isReservedHost(host) {
+  if (typeof host !== 'string') return true;
+  const value = host.toLowerCase();
+  return ['example.com', 'example.org', 'example.net', 'localhost', 'test', 'invalid'].some(
+    suffix => value === suffix || value.endsWith('.' + suffix));
+}
+
+function isPublisherHttpsUrl(value) {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' && !url.username && !url.password &&
+      !isReservedHost(url.hostname) && url.hostname.includes('.') &&
+      !/^\d+(\.\d+){3}$/.test(url.hostname);
+  } catch { return false; }
+}
+
+function isEasBuildPage(value) {
+  if (typeof value !== 'string') return false;
+  try {
+    const url = new URL(value);
+    return url.origin === 'https://expo.dev' && !url.username && !url.password &&
+      /^\/accounts\/[^/]+\/projects\/[^/]+\/builds\/[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(url.pathname);
+  } catch { return false; }
+}
+
+function isPastCalendarDate(date) {
+  if (typeof date !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const parsed = new Date(date + 'T00:00:00.000Z');
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === date &&
+    parsed.getTime() <= Date.now();
+}
+
+// Only validates the file format/dimensions. Human approval of artwork remains mandatory.
+export function hasValidLauncherIcon(filePath) {
+  try {
+    const data = fs.readFileSync(filePath);
+    const signature = Buffer.from([137,80,78,71,13,10,26,10]);
+    return data.length >= 33 && data.subarray(0, 8).equals(signature) &&
+      data.toString('ascii', 12, 16) === 'IHDR' &&
+      data.readUInt32BE(16) === 1024 && data.readUInt32BE(20) === 1024;
+  } catch { return false; }
+}
+
+export function validateVersionPair(app, pkg) {
+  return app?.expo?.version === pkg?.version ? [] :
+    ['Expo app.json version and package.json version must match'];
+}
+
 export function qaMatrixIds(markdown) {
   return [...markdown.matchAll(/^\|\s*(\d{2})\s*\|/gm)].map(match => match[1]);
 }
@@ -97,7 +157,10 @@ function execute() {
   const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
   const app = JSON.parse(fs.readFileSync(path.join(root, 'app.json'), 'utf8'));
   const eas = JSON.parse(fs.readFileSync(path.join(root, 'eas.json'), 'utf8'));
-  const configIssues = validateReleaseConfig(app, eas);
+  const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  const configIssues = [
+    ...validateReleaseConfig(app, eas), ...validateVersionPair(app, pkg),
+  ];
   const strict = process.argv.includes('--ready');
   if (process.argv.includes('--linked')) configIssues.push(...validateEasLink(app));
   if (strict) {
@@ -109,8 +172,11 @@ function execute() {
       configIssues.push('Device QA matrix no longer matches expected 01–20 checklist');
     }
     const icon = app.expo?.icon;
-    const hasIcon = typeof icon === 'string' && fs.existsSync(path.resolve(root, icon));
-    configIssues.push(...validateReleaseEvidence(app, evidence, qaIds, hasIcon));
+    const hasIcon = typeof icon === 'string' && hasValidLauncherIcon(path.resolve(root, icon));
+    let currentCommit = null;
+    try { currentCommit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim(); }
+    catch { configIssues.push('Cannot read the current Git commit for native QA evidence validation'); }
+    configIssues.push(...validateReleaseEvidence(app, evidence, qaIds, hasIcon, currentCommit));
   }
   if (configIssues.length) {
     console.error(strict ? 'Release blocked:' : 'Release configuration invalid:');

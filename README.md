@@ -4,7 +4,7 @@
 
 The approved product includes **workouts, cardio, nutrition, hydration, body measurements, goals and wellbeing**. The app is offline-first and will not require an account for v1.0.
 
-> The repository currently contains a working *starter implementation* with five navigation tabs, workout logging, an expanded activity library, locally stored custom exercises, session history and settings. Nutrition and wellbeing are planned but **not yet implemented**. Cardio and timed exercise logging are available in the workout editor. Workout storage now uses native SQLite; existing AsyncStorage records are imported on upgrade.
+> **Development status:** All 15 implementation groups are in the repository, including offline nutrition, hydration, wellbeing, local JSON backups and EAS release configuration. Automated validation is passing. **Android/iOS native device QA, signing, publisher setup and store approval remain pending.** Do not treat this as a published or release-ready v1.0.
 
 See the [approved product roadmap](docs/product-plan.md) for the scope and 15 implementation groups.
 
@@ -19,15 +19,16 @@ See the [approved product roadmap](docs/product-plan.md) for the scope and 15 im
 - Build reusable workout routines with ordered exercises, target sets/reps/weight and recurring weekly schedules.
 - See local save status and retry failed writes; workout start/finish waits for SQLite confirmation.
 - View workout history with date filters, eight-week training charts, exercise progression and personal records.
+- Record food servings and meals, daily macro/calorie targets, water intake, and weekly summaries locally.
+- Record body metrics, fitness goals and optional wellbeing/recovery check-ins with local trend charts.
+- Use first-launch introduction, local backup export, validated full-journal import, and database integrity diagnostics.
 - Log body weight and circumference measurements, review historical trends and manage fitness targets.
 - Choose kg/lb and light/dark/system appearance.
 - Store workout data locally in Expo SQLite with transactional writes and schema migrations.
 - Import valid legacy AsyncStorage workouts without deleting the original source.
 - Compact light/dark UI primitives, shared semantic colors, and accessibility labels.
 
-The Nutrition screen is a clearly marked placeholder; it does not store or calculate meals or hydration yet.
-
-There is no authentication, backend, cloud sync, or automated backup yet. SQLite is unencrypted by default. Do not store credentials in it.
+There is no authentication, backend, cloud sync, or automatic backup. SQLite is unencrypted by default; manually exported JSON files also contain unencrypted personal fitness and wellness records. Keep them private, verify a saved copy outside the app sandbox, and do not store credentials in SQLite.
 
 ## Requirements
 
@@ -60,7 +61,7 @@ npm run test
 npm run check:expo
 ```
 
-Or run `npm run validate` for all checks together. The GitHub Actions workflow runs these checks using `npm ci` and a committed `package-lock.json`. Unit tests use the Node.js test runner for dependency-free domain logic.
+Or run `npm run validate` for all checks together. The GitHub Actions workflow runs these checks using `npm ci` and a committed `package-lock.json`. Tests include domain logic, native Node SQLite repository integration and release guardrails. CI also validates evaluated native Expo config and exports Android/iOS production JavaScript bundles; these checks do **not** replace native installation testing.
 
 ## Source layout
 
@@ -79,18 +80,18 @@ docs/                 Approved product roadmap
 
 ## Privacy and release status
 
-Training data stays on the device. Legacy AsyncStorage records are retained after migration. If import fails, the app reports an error without replacing the old record. Uninstalling or clearing app storage may erase both copies. Planned nutrition and wellbeing entries are personal data; exports, local deletion and data recovery must be explicit and tested before release.
+Training, nutrition, hydration, measurements and recovery data are on-device by default. Legacy AsyncStorage records are retained after migration; an import failure does not replace the original record. Uninstalling or clearing app storage can erase data. **Settings → Export full JSON backup** creates a file for the user to save externally; the app provides no automatic cloud recovery. **Restore backup** validates a selected file and requires two confirmations before replacing the entire journal.
 
-Store identifiers, icons, privacy disclosures, EAS signing, installation tests and release builds are still pending. This is a development app, not a published v1.0.
+Provisional native package IDs and EAS build profiles are configured, but the actual Expo project link, signed installation tests, approved branding, privacy/support contacts and store submission remain outstanding. See [release preparation](docs/release.md) and the [native QA matrix](docs/qa-device-matrix.md). No version 1.0.0 or public release has been authorized.
 
 ## SQLite migration (Group 3)
 
 - Native database: `gym-app.db`; schema version uses `PRAGMA user_version`.
-- Tables: workouts, workout_movements, workout_sets, preferences, app_metadata.
+- Schema version 9 covers training, routines, custom exercises, body metrics/goals, foods/meals, nutrition targets, hydration and recovery.
 - Foreign keys, indexes, cascading deletes, transactional writes.
 - Legacy key `gym-app:data:v1` is imported atomically, never deleted or overwritten.
 - Current UI uses serialized async writes. Force-killing immediately after an edit can still interrupt the last write; Group 5 hardens session recovery.
-- Group 13 adds user-controlled backup/import. There is no cloud backup yet.
+- Manual full-journal backup/restore is implemented; there is no scheduled or cloud backup.
 
 See [SQLite migration details](docs/sqlite.md).
 
