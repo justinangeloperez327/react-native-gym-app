@@ -269,7 +269,7 @@ export default function BodyProgressScreen() {
                 : String(selectedGoal.targetValue) + ' workouts/week'}
             </Text>
             <View style={{ height: 8, borderRadius: 4, backgroundColor: colors.border, overflow: 'hidden' }}>
-              <View style={{ height: 8, borderRadius: 4, width: String(progress.percent) + '%',
+              <View style={{ height: 8, borderRadius: 4, width: (progress.percent + '%') as `${number}%`,
                 backgroundColor: colors.primary }} />
             </View>
             <Text style={{ color: colors.text, fontSize: 14, fontWeight: '600' }}>

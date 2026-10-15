@@ -72,7 +72,7 @@ export default function ProgressScreen() {
                 {goal.kind === 'body_weight' ? 'Weight goal' : 'Weekly training goal'} · {progress.percent.toFixed(0)}%
               </Text>
               <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.border, overflow: 'hidden' }}>
-                <View style={{ width: String(progress.percent) + '%', height: 6, backgroundColor: colors.primary }} />
+                <View style={{ width: (progress.percent + '%') as `${number}%`, height: 6, backgroundColor: colors.primary }} />
               </View>
             </View>;
           })}
