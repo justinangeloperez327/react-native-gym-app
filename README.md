@@ -162,3 +162,11 @@ Users can configure any combination of optional daily targets for calories, prot
 **Hydration** supports quick additions of 250 or 500 ml and custom millilitre amounts (up to 5,000 ml per entry), as well as editing/deleting individual records and logging against the currently selected diary date. Only manually logged water is included; beverages and water from food are not inferred. The last-seven-day summary shows recorded calorie and water totals for each local calendar day, including days without entries as zero *logged* amounts.
 
 SQLite schema **v8** adds optional `nutrition_targets` and dated `water_entries`. All changes use confirmed database transactions. Training, food and meal history remain unchanged by nutrition-target edits or water-entry deletion.
+
+## Wellbeing and recovery (Group 12)
+
+The **Overview** and **Progress** screens link to **Wellbeing & recovery**. Record a daily self-reported check-in with optional hours slept, sleep quality, energy, mood, muscle soreness, stress (all 1–5 scales) and private notes. At least one value or a note is needed; each local calendar date holds at most one entry. You can update or delete saved entries. Empty days stay unrecorded rather than being interpreted as zero recovery or zero sleep.
+
+The recovery screen shows a 14-day sleep-duration chart, average sleep/energy/soreness based only on available observations, and a side-by-side summary of logged sleep and training. A workout is aligned to its **completion date in the device's local timezone**, and unfinished/future-dated sessions are excluded. The view is descriptive: **it does not calculate a readiness score, diagnose health, or imply that sleep caused any training outcome**.
+
+SQLite schema **v9** introduces `recovery_entries` with a unique date, optional validated ratings and sleep duration (stored as integer minutes), and notes. The migration leaves workouts, nutrition, hydration, routines and body records intact; recovery updates use confirmed exclusive transactions. Native device verification is still required.

@@ -87,3 +87,11 @@ All writes are validated and run in exclusive SQLite transactions. Date rules re
 `water_entries` contains independent stable IDs, a local YYYY-MM-DD diary date and a positive water amount in ml. Indexed date access allows logging several entries per day. All writes and deletions are exclusive SQLite transactions. New water amounts must be positive and at most 5,000 ml per entry.
 
 Daily nutrition calculations use the existing immutable `meal_entries` serving and nutrient snapshots; no migration rewrites older meal records. Macro totals are grams/serving multiplied by logged quantity. Estimates use macro energy factors of 4/4/9 kcal/g and may differ from saved food-label calories. Water totals include only manually logged water.
+
+## Schema version 9 — recovery and wellbeing journal
+
+`recovery_entries` stores one self-reported check-in per local YYYY-MM-DD date. Columns include `sleep_minutes` (optional integer 1–1440), `sleep_quality`, `energy`, `mood`, `soreness` and `stress` (each nullable 1–5), plus a short optional notes field. A UNIQUE date index prevents accidental duplicate entries for the same day. Entry IDs remain stable when records are edited; deletes do not cascade into workouts or other fitness data.
+
+Data reads and writes run through the same confirmed transactional repository used by body measurements and nutrition. Domain validation checks real calendar days (not future dates), input bounds, notes length and that a check-in is not completely empty. Migration v9 is additive and guarded by SQLite `PRAGMA user_version`; it is rolled back atomically if schema creation fails.
+
+Summary calculations use completed workout finish timestamps assigned to the local calendar date. Unlogged recovery fields are excluded from averages, and incomplete workouts are excluded from training counts. No physiological interpretation or readiness score is generated.

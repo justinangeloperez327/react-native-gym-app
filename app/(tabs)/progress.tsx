@@ -4,6 +4,7 @@ import { Pressable, Text, TextInput, View } from 'react-native';
 import { EmptyState, Metric, Page, Panel, ScreenHeader, SectionTitle } from '@/src/components/ui';
 import { WorkoutPreview } from '@/src/components/WorkoutPreview';
 import { goalProgress, formatMeasurement, latestReading } from '@/src/lib/body-metrics';
+import { formatSleep, recoveryTrainingDays, summarizeRecovery } from '@/src/lib/recovery';
 import { findExercise } from '@/src/data/exercises';
 import { exercisesInHistory, filterHistory, trainingSummary, weeklyTrends, type WeeklyTrend } from '@/src/lib/analytics';
 import { formatActivityTime, formatWeight } from '@/src/lib/workouts';
@@ -18,7 +19,7 @@ const metrics: { key: Measure; title: string }[] = [
 ];
 
 export default function ProgressScreen() {
-  const { workouts, preferences, customExercises, measurements, goals } = useGym();
+  const { workouts, preferences, customExercises, measurements, goals, recoveryEntries } = useGym();
   const { colors } = useAppTheme();
   const [window, setWindow] = useState<Window>(30);
   const [measure, setMeasure] = useState<Measure>('sessions');
@@ -28,6 +29,7 @@ export default function ProgressScreen() {
   const history = useMemo(() => filterHistory(workouts, window, new Date()),
     [workouts, window]);
   const summary = useMemo(() => trainingSummary(workouts), [workouts]);
+  const recoverySummary = useMemo(() => summarizeRecovery(recoveryTrainingDays(recoveryEntries, workouts)), [recoveryEntries, workouts]);
   const trends = useMemo(() => weeklyTrends(workouts, new Date()), [workouts]);
   const exercised = useMemo(() => exercisesInHistory(workouts), [workouts]);
   const matches = exercised.filter(item => (findExercise(item.id, customExercises)?.name ?? item.id)
@@ -79,6 +81,24 @@ export default function ProgressScreen() {
           <Pressable accessibilityRole="button" accessibilityLabel="Open body measurements and goals"
             onPress={() => router.push('/body')} style={{ minHeight: 44, justifyContent: 'center' }}>
             <Text style={{ color: colors.primary, fontWeight: '600' }}>View measurements & goals →</Text>
+          </Pressable>
+        </Panel>
+      </View>
+      <View style={{ gap: 10 }}>
+        <SectionTitle>Recovery overview</SectionTitle>
+        <Panel>
+          <Text style={{ color: colors.muted, fontSize: 13 }}>Last 14 calendar days</Text>
+          <Text style={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>
+            {recoverySummary.daysWithCheckins} check-ins ·
+            {recoverySummary.averageSleepMinutes === null ? ' no sleep logged' :
+              ' avg. sleep ' + formatSleep(Math.round(recoverySummary.averageSleepMinutes))}
+          </Text>
+          <Pressable accessibilityRole="button" accessibilityLabel="Open recovery and sleep history"
+            onPress={() => router.push('/recovery')}
+            style={{ minHeight: 44, justifyContent: 'center' }}>
+            <Text style={{ color: colors.primary, fontWeight: '600' }}>
+              View sleep, recovery & training context →
+            </Text>
           </Pressable>
         </Panel>
       </View>

@@ -107,3 +107,16 @@ export type WaterEntry = {
   recordedOn: string; // Local calendar date YYYY-MM-DD
   amountMl: number;
 };
+
+/** Optional, self-reported recovery information for one device-local calendar day. */
+export type RecoveryEntry = {
+  id: string;
+  recordedOn: string;
+  sleepMinutes: number | null;
+  sleepQuality: number | null;
+  energy: number | null;
+  mood: number | null;
+  soreness: number | null;
+  stress: number | null;
+  notes: string;
+};

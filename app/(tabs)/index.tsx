@@ -4,11 +4,13 @@ import { Alert, Text, View } from 'react-native';
 import { AppButton, EmptyState, Metric, Page, Panel, ScreenHeader, SectionTitle } from '@/src/components/ui';
 import { WorkoutPreview } from '@/src/components/WorkoutPreview';
 import { completedSets, formatWeight, totalVolumeKg } from '@/src/lib/workouts';
+import { formatSleep, recoveryByDate } from '@/src/lib/recovery';
+import { localDateKey } from '@/src/lib/body-metrics';
 import { useGym } from '@/src/state/GymContext';
 import { useAppTheme } from '@/src/theme/colors';
 
 export default function HomeScreen() {
-  const { workouts, preferences, startWorkout, error } = useGym();
+  const { workouts, preferences, startWorkout, error, recoveryEntries } = useGym();
   const { colors } = useAppTheme();
   const [starting, setStarting] = useState(false);
   const finished = workouts.filter((workout) => workout.finishedAt);
@@ -69,15 +71,21 @@ export default function HomeScreen() {
         )}
       </View>
       <View style={{ gap: 10 }}>
-        <SectionTitle>Beyond workouts</SectionTitle>
+        <SectionTitle>Wellbeing & recovery</SectionTitle>
         <Panel>
-          <Text style={{ color: colors.text, fontSize: 15, fontWeight: '600' }}>
-            Your fitness journal is growing
-          </Text>
-          <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 21 }}>
-            Nutrition, hydration, body measurements and wellbeing tracking are planned for later groups.
-            These features are not recording data yet.
-          </Text>
+          {(() => {
+            const checkin = recoveryByDate(recoveryEntries, localDateKey());
+            return <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 20 }}>
+              {checkin ? [
+                checkin.sleepMinutes ? 'Sleep ' + formatSleep(checkin.sleepMinutes) : null,
+                checkin.energy !== null ? 'Energy ' + checkin.energy + '/5' : null,
+                checkin.soreness !== null ? 'Soreness ' + checkin.soreness + '/5' : null,
+              ].filter(Boolean).join(' · ') || 'Today’s check-in saved'
+                : 'No check-in logged today. Track sleep and how you feel.'}
+            </Text>;
+          })()}
+          <AppButton title="Open daily recovery check-in" secondary
+            onPress={() => router.push('/recovery')} />
         </Panel>
       </View>
     </Page>

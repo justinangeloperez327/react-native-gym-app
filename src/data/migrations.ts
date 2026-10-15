@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 /** PRAGMA user_version advances atomically with the DDL transaction. */
 export const MIGRATION_V1 = [
@@ -72,4 +72,10 @@ export const MIGRATION_V8 = [
   "CREATE TABLE water_entries (id TEXT PRIMARY KEY NOT NULL, recorded_on TEXT NOT NULL, amount_ml REAL NOT NULL CHECK(amount_ml > 0 AND amount_ml <= 5000))",
   "CREATE INDEX idx_water_entries_day ON water_entries(recorded_on DESC, id)",
   'PRAGMA user_version = 8',
+].join(';\n') + ';';
+
+export const MIGRATION_V9 = [
+  "CREATE TABLE recovery_entries (id TEXT PRIMARY KEY NOT NULL, recorded_on TEXT NOT NULL UNIQUE, sleep_minutes INTEGER CHECK(sleep_minutes IS NULL OR sleep_minutes BETWEEN 1 AND 1440), sleep_quality INTEGER CHECK(sleep_quality IS NULL OR sleep_quality BETWEEN 1 AND 5), energy INTEGER CHECK(energy IS NULL OR energy BETWEEN 1 AND 5), mood INTEGER CHECK(mood IS NULL OR mood BETWEEN 1 AND 5), soreness INTEGER CHECK(soreness IS NULL OR soreness BETWEEN 1 AND 5), stress INTEGER CHECK(stress IS NULL OR stress BETWEEN 1 AND 5), notes TEXT NOT NULL DEFAULT '')",
+  "CREATE INDEX idx_recovery_date ON recovery_entries(recorded_on DESC)",
+  'PRAGMA user_version = 9',
 ].join(';\n') + ';';

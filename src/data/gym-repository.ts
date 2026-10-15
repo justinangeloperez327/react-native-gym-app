@@ -1,10 +1,11 @@
 import { emptyGymData, isGymData, parseLegacy } from './legacy.ts';
-import { MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5, MIGRATION_V6, MIGRATION_V7, MIGRATION_V8, SCHEMA_VERSION } from './migrations.ts';
+import { MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5, MIGRATION_V6, MIGRATION_V7, MIGRATION_V8, MIGRATION_V9, SCHEMA_VERSION } from './migrations.ts';
 import { normalizeExerciseInput } from './exercises.ts';
 import { validateRoutine } from './routines.ts';
 import { assertMeasurement, assertGoal } from '../lib/body-metrics.ts';
 import { validateFood, validateMeal, validateNutritionTargets, validateWaterEntry } from '../lib/nutrition.ts';
-import type { GymData, Preferences, Workout, WorkoutMovement, TrainingSet, Exercise, RoutineTemplate, RoutineExercise, BodyMeasurement, FitnessGoal, FoodItem, MealEntry, NutritionTargets, WaterEntry } from '../types/gym';
+import { validateRecovery } from '../lib/recovery.ts';
+import type { GymData, Preferences, Workout, WorkoutMovement, TrainingSet, Exercise, RoutineTemplate, RoutineExercise, BodyMeasurement, FitnessGoal, FoodItem, MealEntry, NutritionTargets, WaterEntry, RecoveryEntry } from '../types/gym';
 
 export type SqlParam = string | number | null;
 
@@ -49,6 +50,11 @@ type TargetRow = {
   fat_grams: number | null; water_ml: number | null;
 };
 type WaterRow = { id: string; recorded_on: string; amount_ml: number };
+type RecoveryRow = {
+  id: string; recorded_on: string; sleep_minutes: number | null;
+  sleep_quality: number | null; energy: number | null; mood: number | null;
+  soreness: number | null; stress: number | null; notes: string;
+};
 type SetRow = { id: string; movement_id: string; position: number; reps: number; weight_kg: number; completed: number; duration_seconds: number | null; distance_meters: number | null; set_type: string };
 
 const LEGACY_STATUS = 'legacy_async_storage_v1';
@@ -117,6 +123,12 @@ export class GymRepository {
     if (currentVersion < 8) {
       await this.db.withExclusiveTransactionAsync(async (tx) => {
         await tx.execAsync(MIGRATION_V8);
+      });
+    }
+
+    if (currentVersion < 9) {
+      await this.db.withExclusiveTransactionAsync(async tx => {
+        await tx.execAsync(MIGRATION_V9);
       });
     }
 
@@ -485,6 +497,39 @@ export class GymRepository {
     if (!id.startsWith('water:')) throw new Error('Invalid water entry ID');
     await this.db.withExclusiveTransactionAsync(async tx => {
       await tx.runAsync('DELETE FROM water_entries WHERE id = ?', id);
+    });
+  }
+
+  async readRecoveryEntries(): Promise<RecoveryEntry[]> {
+    const rows = await this.db.getAllAsync(
+      'SELECT id,recorded_on,sleep_minutes,sleep_quality,energy,mood,soreness,stress,notes FROM recovery_entries ORDER BY recorded_on DESC, id',
+    ) as RecoveryRow[];
+    return rows.map(row => {
+      const entry: RecoveryEntry = {
+        id: row.id, recordedOn: row.recorded_on, sleepMinutes: row.sleep_minutes,
+        sleepQuality: row.sleep_quality, energy: row.energy, mood: row.mood,
+        soreness: row.soreness, stress: row.stress, notes: row.notes,
+      };
+      validateRecovery(entry);
+      return entry;
+    });
+  }
+
+  async saveRecoveryEntry(entry: RecoveryEntry): Promise<void> {
+    validateRecovery(entry);
+    await this.db.withExclusiveTransactionAsync(async tx => {
+      await tx.runAsync(
+        'INSERT INTO recovery_entries(id,recorded_on,sleep_minutes,sleep_quality,energy,mood,soreness,stress,notes) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET recorded_on=excluded.recorded_on,sleep_minutes=excluded.sleep_minutes,sleep_quality=excluded.sleep_quality,energy=excluded.energy,mood=excluded.mood,soreness=excluded.soreness,stress=excluded.stress,notes=excluded.notes',
+        entry.id, entry.recordedOn, entry.sleepMinutes, entry.sleepQuality,
+        entry.energy, entry.mood, entry.soreness, entry.stress, entry.notes,
+      );
+    });
+  }
+
+  async deleteRecoveryEntry(id: string): Promise<void> {
+    if (!id.startsWith('recovery:')) throw new Error('Invalid recovery ID');
+    await this.db.withExclusiveTransactionAsync(async tx => {
+      await tx.runAsync('DELETE FROM recovery_entries WHERE id = ?', id);
     });
   }
 

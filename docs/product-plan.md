@@ -294,6 +294,22 @@ Daily calorie targets, macro goals/calculations, hydration logging and nutrition
 ### Data boundaries
 No preset calorie, macro or water intake targets are assigned. Food nutrition is user-entered; zero grams may represent unspecified macro values. Hydration totals count water logs only, and the seven-day summary reflects entered values rather than verified physiological intake.
 
+## Group 12: Wellbeing and Recovery
+
+### Implemented
+- [x] SQLite schema v9 for unique dated recovery check-ins without altering older workout or nutrition data.
+- [x] Optional logged sleep duration, quality, energy, mood, soreness, stress and notes; all scales clearly identified.
+- [x] Create/edit/delete historical check-ins using confirmed SQLite transactions.
+- [x] Calendar-day recovery summaries, 14-day sleep chart and missing-data-safe averages.
+- [x] Align completed workouts with recovery observations by local workout completion date.
+- [x] Overview and Progress navigation to a dedicated recovery journal.
+- [x] Unit and SQLite tests for validation, persistence, date aggregation and migration rollback.
+- [ ] Verify final GitHub Actions CI on main.
+- [ ] Test Android/iOS date entry, keyboard behavior, accessibility and long-history performance.
+
+### Data and interpretation boundaries
+All observations are optional and self-reported. Missing data never counts as an actual zero rating or zero hours of sleep. Training context is descriptive, not a causal analysis or clinical correlation. There is no medical sleep recommendation, readiness score, automated health inference or notifications. Physical-device behavior remains unverified.
+
 ## Versioning
 
 Keep the app prerelease until Group 15. Version `0.1.0` identifies the current development baseline; it is not a claim of production readiness. Publish v1.0.0 only after the complete fitness core and quality gates above are satisfied.

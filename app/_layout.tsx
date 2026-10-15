@@ -33,6 +33,7 @@ function Navigation() {
         <Stack.Screen name="body" />
         <Stack.Screen name="food-editor" />
         <Stack.Screen name="nutrition-targets" />
+        <Stack.Screen name="recovery" />
       </Stack>
     </>
   );
