@@ -340,7 +340,7 @@ Restore **replaces** existing local data; it is not a merge operation. The user 
 - [x] Fix contrast semantics for primary destructive actions in the shared button component.
 - [x] Add SQLite foreign-key diagnostics, stress-history and backup-size regression tests.
 - [x] Add production Metro export for Android and iOS to CI (JavaScript bundle smoke test, not a native install).
-- [ ] Verify final CI on main.
+- [x] Verify final CI on main (111 automated tests and both Android/iOS Metro production bundles).
 
 ### Native release blockers (still unverified; do not imply pass)
 - [ ] Android and iOS cold-start, onboarding, airplane mode, and navigation smoke test.
