@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Alert, Pressable, Text, TextInput, View } from 'react-native';
 import { AppButton, EmptyState, Metric, Page, Panel, ScreenHeader, SectionTitle } from '@/src/components/ui';
+import { NutritionInsights } from '@/src/components/NutritionInsights';
 import { isCalendarDate, localDateKey } from '@/src/lib/body-metrics';
 import { caloriesByMeal, mealCalories, mealFromFood, mealsOnDay, MEAL_TYPES, searchFoods, totalCalories } from '@/src/lib/nutrition';
 import { createId } from '@/src/lib/workouts';
@@ -97,9 +98,10 @@ export default function NutritionScreen() {
           <Metric label="Foods logged" value={String(entries.length)} />
         </View>
         <Text style={{ color: colors.muted, fontSize: 12 }}>
-          Calories are estimated from nutrition values you enter. Daily calorie and macro targets are planned for Group 11.
+          Nutritional estimates are based on food values you entered and servings logged.
         </Text>
       </Panel>
+      <NutritionInsights day={date} />
       <View style={{ gap: 10 }}>
         <SectionTitle>Meal diary</SectionTitle>
         {MEAL_TYPES.map(type => {

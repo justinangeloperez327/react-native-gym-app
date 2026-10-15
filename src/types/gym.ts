@@ -93,3 +93,17 @@ export type MealEntry = {
   carbsPerServing: number;
   fatPerServing: number;
 };
+
+/** Optional targets: null means the user has not configured this dimension. */
+export type NutritionTargets = {
+  calories: number | null;
+  proteinGrams: number | null;
+  carbsGrams: number | null;
+  fatGrams: number | null;
+  waterMl: number | null;
+};
+export type WaterEntry = {
+  id: string;
+  recordedOn: string; // Local calendar date YYYY-MM-DD
+  amountMl: number;
+};

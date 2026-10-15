@@ -152,3 +152,13 @@ Add any number of servings from 0.05 to 50, then view the day's calorie total an
 SQLite schema **version 7** adds `foods` and `meal_entries`. Both use confirmed transactions and keep training and body-measurement data unchanged. The food editor can also store protein/carbohydrate/fat values per serving for future use, but calculated macro targets, hydration, daily target comparisons, and detailed nutrition reporting are **Group 11** functionality. Zero macro fields are not automatically verified nutrition values.
 
 A personal nutrition diary is not a medical assessment or a guarantee of nutritional accuracy. User-entered food values and quantities determine the displayed calorie estimates.
+
+## Nutrition targets, macros and hydration (Group 11)
+
+The **Nutrition** tab now shows calories, protein, carbohydrates and fat from the saved, per-serving food snapshots. Macro-energy percentage is calculated as 4 kcal/g protein, 4 kcal/g carbohydrate and 9 kcal/g fat; this approximate distribution can differ from recorded label calories. A zero stored macro value may mean that the user left a food-label field unprovided, rather than that the food truly contains none of it.
+
+Users can configure any combination of optional daily targets for calories, protein, carbs, fat and water via **Nutrition → Configure daily targets**. Targets have no automatic or medically prescribed defaults. Daily bars show percentage filled, remaining amounts and over-target amounts. Clearing targets does not affect foods or diary entries.
+
+**Hydration** supports quick additions of 250 or 500 ml and custom millilitre amounts (up to 5,000 ml per entry), as well as editing/deleting individual records and logging against the currently selected diary date. Only manually logged water is included; beverages and water from food are not inferred. The last-seven-day summary shows recorded calorie and water totals for each local calendar day, including days without entries as zero *logged* amounts.
+
+SQLite schema **v8** adds optional `nutrition_targets` and dated `water_entries`. All changes use confirmed database transactions. Training, food and meal history remain unchanged by nutrition-target edits or water-entry deletion.

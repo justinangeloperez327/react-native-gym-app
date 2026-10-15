@@ -7,7 +7,7 @@ import { emptyGymData, LEGACY_KEY } from '@/src/data/legacy';
 import type { GymRepository } from '@/src/data/gym-repository';
 import { createId, previousCompletedSets, defaultSetForTracking, copySetForNewSession } from '@/src/lib/workouts';
 import { buildStarterRoutine, createRoutineTemplate, duplicateRoutineTemplate, routineToWorkout, validateRoutine } from '@/src/data/routines';
-import type { Exercise, ExerciseInput, GymData, Preferences, TrainingSet, Workout, WorkoutMovement, RoutineTemplate, BodyMeasurement, FitnessGoal, FoodItem, MealEntry } from '@/src/types/gym';
+import type { Exercise, ExerciseInput, GymData, Preferences, TrainingSet, Workout, WorkoutMovement, RoutineTemplate, BodyMeasurement, FitnessGoal, FoodItem, MealEntry, NutritionTargets, WaterEntry } from '@/src/types/gym';
 
 type GymContextValue = {
   ready: boolean;
@@ -22,6 +22,12 @@ type GymContextValue = {
   goals: FitnessGoal[];
   foods: FoodItem[];
   meals: MealEntry[];
+  nutritionTargets: NutritionTargets | null;
+  waterEntries: WaterEntry[];
+  saveNutritionTargets: (targets: NutritionTargets) => Promise<void>;
+  clearNutritionTargets: () => Promise<void>;
+  saveWaterEntry: (entry: WaterEntry) => Promise<void>;
+  deleteWaterEntry: (id: string) => Promise<void>;
   saveFood: (food: FoodItem) => Promise<void>;
   archiveFood: (id: string) => Promise<void>;
   saveMeal: (entry: MealEntry) => Promise<void>;
@@ -78,6 +84,9 @@ export function GymProvider({ children }: { children: ReactNode }) {
   const [meals, setMeals] = useState<MealEntry[]>([]);
   const foodsRef = useRef<FoodItem[]>([]);
   const mealsRef = useRef<MealEntry[]>([]);
+  const [nutritionTargets, setNutritionTargets] = useState<NutritionTargets | null>(null);
+  const [waterEntries, setWaterEntries] = useState<WaterEntry[]>([]);
+  const waterRef = useRef<WaterEntry[]>([]);
   const routinesRef = useRef<RoutineTemplate[]>([]);
   const customRef = useRef<Exercise[]>([]);
   const latestRef = useRef<GymData>(data);
@@ -101,6 +110,8 @@ export function GymProvider({ children }: { children: ReactNode }) {
         const savedGoals = await repository.readGoals();
         const savedFoods = await repository.readFoods();
         const savedMeals = await repository.readMeals();
+        const savedTargets = await repository.readNutritionTargets();
+        const savedWater = await repository.readWaterEntries();
         if (!mountedRef.current) return;
         repositoryRef.current = repository;
         latestRef.current = restored;
@@ -117,6 +128,9 @@ export function GymProvider({ children }: { children: ReactNode }) {
         setFoods(savedFoods);
         mealsRef.current = savedMeals;
         setMeals(savedMeals);
+        setNutritionTargets(savedTargets);
+        waterRef.current = savedWater;
+        setWaterEntries(savedWater);
         setReady(true);
       } catch (cause) {
         if (!mountedRef.current) return;
@@ -400,6 +414,32 @@ export function GymProvider({ children }: { children: ReactNode }) {
     setMeals(next);
   }, [commitConfirmed]);
 
+  const saveNutritionTargets = useCallback(async (targets: NutritionTargets): Promise<void> => {
+    await commitConfirmed(repo => repo.saveNutritionTargets(targets));
+    setNutritionTargets(targets);
+  }, [commitConfirmed]);
+
+  const clearNutritionTargets = useCallback(async (): Promise<void> => {
+    await commitConfirmed(repo => repo.clearNutritionTargets());
+    setNutritionTargets(null);
+  }, [commitConfirmed]);
+
+  const saveWaterEntry = useCallback(async (entry: WaterEntry): Promise<void> => {
+    await commitConfirmed(repo => repo.saveWaterEntry(entry));
+    const next = [entry, ...waterRef.current.filter(item => item.id !== entry.id)]
+      .sort((a, b) => b.recordedOn.localeCompare(a.recordedOn) || a.id.localeCompare(b.id));
+    waterRef.current = next;
+    setWaterEntries(next);
+  }, [commitConfirmed]);
+
+  const deleteWaterEntry = useCallback(async (id: string): Promise<void> => {
+    if (!waterRef.current.some(item => item.id === id)) throw new Error('Water entry not found');
+    await commitConfirmed(repo => repo.deleteWaterEntry(id));
+    const next = waterRef.current.filter(item => item.id !== id);
+    waterRef.current = next;
+    setWaterEntries(next);
+  }, [commitConfirmed]);
+
   const applyWorkout = useCallback((
     id: string,
     operation: (workout: Workout) => Workout,
@@ -607,6 +647,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
       routines, saveRoutine, createRoutine, importStarterRoutine, duplicateRoutine, deleteRoutine, startRoutineWorkout,
       measurements, goals, saveBodyMeasurement, deleteBodyMeasurement, saveFitnessGoal, deleteFitnessGoal,
       foods, meals, saveFood, archiveFood, saveMeal, deleteMeal,
+      nutritionTargets, waterEntries, saveNutritionTargets, clearNutritionTargets, saveWaterEntry, deleteWaterEntry,
       startWorkout, addMovement, setRestSeconds, toggleSupersetWithPrevious, addSet, removeSet, copyPreviousSets,
       setWorkoutNotes, setMovementNotes, updateSet, removeMovement,
       finishWorkout, deleteWorkout, updatePreferences,

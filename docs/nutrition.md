@@ -25,3 +25,13 @@ All data is local to the mobile app's SQLite database. Users create foods using 
 
 ## Deferred until Group 11
 Calorie target setup, macro goal totals/targets, hydration intake and target-comparison dashboards. Group 10 records caloric intake only; it does not prescribe dietary goals or interpret a person's health.
+
+## Group 11 — daily goals, macronutrients and water
+
+- The daily nutrition section calculates protein, carbs and fat from each logged food snapshot multiplied by its serving quantity. Macro calorie percentages use 4/4/9 factors and are indicative rather than exact label calories.
+- Personal energy, macro and water targets are optional. A blank field removes that target and no defaults are supplied.
+- Progress bars are capped at 100%, with over-target quantities still shown as text. Recorded values are not adjusted to match a target.
+- Dated water entries can be added, edited and removed. Water logging is distinct from the food diary and does not infer water from other drinks or meals.
+- Last-seven-day summaries use local calendar dates. A day without logs is shown as zero logged intake and is not evidence of zero actual consumption.
+- Changing targets never alters food, workout or water history.
+- Android/iOS interactive behavior requires physical-device checks in the stabilization group.

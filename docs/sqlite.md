@@ -79,3 +79,11 @@ Readings, goals and deletions use confirmed, exclusive SQLite transactions. An u
 `meal_entries` stores local-date `eaten_on`, meal type (breakfast/lunch/dinner/snack), serving multiplier, historical food identity and **all nutrition values copied at log time**. Entries do not cascade from foods: editing/archiving a food never changes previously saved meals. Quantity edits only change the serving multiplier on that snapshot.
 
 All writes are validated and run in exclusive SQLite transactions. Date rules reject future/noncalendar days. The default nutrition screen calculates daily kcal by summing `quantity * calories_per_serving` of entries for the selected date. Group 11 will add detailed macro targets, hydration, and goal comparisons.
+
+## Schema version 8 — targets, macros and hydration
+
+`nutrition_targets` is an optional singleton keyed by id=1. Columns for calories, protein grams, carbohydrate grams, fat grams and water ml are individually nullable; NULL means no user target. No record is created on upgrade. Updates replace the values transactionally, and clearing targets deletes only that singleton.
+
+`water_entries` contains independent stable IDs, a local YYYY-MM-DD diary date and a positive water amount in ml. Indexed date access allows logging several entries per day. All writes and deletions are exclusive SQLite transactions. New water amounts must be positive and at most 5,000 ml per entry.
+
+Daily nutrition calculations use the existing immutable `meal_entries` serving and nutrient snapshots; no migration rewrites older meal records. Macro totals are grams/serving multiplied by logged quantity. Estimates use macro energy factors of 4/4/9 kcal/g and may differ from saved food-label calories. Water totals include only manually logged water.

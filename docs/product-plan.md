@@ -276,6 +276,24 @@ Body readings are self-reported, stored locally, and not interpreted as medical 
 ### Group 11 boundary
 Daily calorie targets, macro goals/calculations, hydration logging and nutrition target comparisons are not implemented in Group 10. Foods have no synthetic defaults; users manually enter label/source values. Logged calories are estimates derived from user-entered records.
 
+## Group 11: Nutrition Targets, Macros and Hydration
+
+### Implemented
+- [x] SQLite migration v8 for nullable daily energy/macronutrient/water targets and dated water-entry history.
+- [x] Optional self-selected targets; no seeded calorie or hydration recommendation.
+- [x] Macro totals calculated from serving-quantity-adjusted historical meal snapshots.
+- [x] Approximate macro-energy distribution using 4/4/9 kcal per gram and explicit data-quality caveats.
+- [x] Target-versus-logged comparisons, progress indicators, remaining values and over-target values.
+- [x] Water tracking with 250/500 ml quick logging and custom quantities on diary dates.
+- [x] Edit/delete individual water logs with confirmed local SQLite writes.
+- [x] Last-seven-day calendar summary of recorded calories and water, including missing-day distinctions.
+- [x] Tests for macro calculations, optional targets, date validation, migration integrity and write rollback.
+- [ ] Verify CI on main.
+- [ ] Android/iOS nutrition-target forms, hydration logs and accessibility testing.
+
+### Data boundaries
+No preset calorie, macro or water intake targets are assigned. Food nutrition is user-entered; zero grams may represent unspecified macro values. Hydration totals count water logs only, and the seven-day summary reflects entered values rather than verified physiological intake.
+
 ## Versioning
 
 Keep the app prerelease until Group 15. Version `0.1.0` identifies the current development baseline; it is not a claim of production readiness. Publish v1.0.0 only after the complete fitness core and quality gates above are satisfied.

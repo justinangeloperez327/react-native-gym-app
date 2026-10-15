@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 7;
+export const SCHEMA_VERSION = 8;
 
 /** PRAGMA user_version advances atomically with the DDL transaction. */
 export const MIGRATION_V1 = [
@@ -65,4 +65,11 @@ export const MIGRATION_V7 = [
   "CREATE TABLE meal_entries (id TEXT PRIMARY KEY NOT NULL, eaten_on TEXT NOT NULL, meal_type TEXT NOT NULL CHECK(meal_type IN ('breakfast','lunch','dinner','snack')), quantity REAL NOT NULL CHECK(quantity > 0), food_id TEXT NOT NULL, food_name TEXT NOT NULL, food_brand TEXT NOT NULL DEFAULT '', serving_grams REAL NOT NULL CHECK(serving_grams > 0), calories_per_serving REAL NOT NULL CHECK(calories_per_serving >= 0), protein_per_serving REAL NOT NULL CHECK(protein_per_serving >= 0), carbs_per_serving REAL NOT NULL CHECK(carbs_per_serving >= 0), fat_per_serving REAL NOT NULL CHECK(fat_per_serving >= 0))",
   "CREATE INDEX idx_meal_entries_date_type ON meal_entries(eaten_on DESC, meal_type, id)",
   'PRAGMA user_version = 7',
+].join(';\n') + ';';
+
+export const MIGRATION_V8 = [
+  "CREATE TABLE nutrition_targets (id INTEGER PRIMARY KEY NOT NULL CHECK(id = 1), calories REAL CHECK(calories IS NULL OR calories BETWEEN 1 AND 10000), protein_grams REAL CHECK(protein_grams IS NULL OR protein_grams BETWEEN 1 AND 1000), carbs_grams REAL CHECK(carbs_grams IS NULL OR carbs_grams BETWEEN 1 AND 1500), fat_grams REAL CHECK(fat_grams IS NULL OR fat_grams BETWEEN 1 AND 500), water_ml REAL CHECK(water_ml IS NULL OR water_ml BETWEEN 1 AND 10000))",
+  "CREATE TABLE water_entries (id TEXT PRIMARY KEY NOT NULL, recorded_on TEXT NOT NULL, amount_ml REAL NOT NULL CHECK(amount_ml > 0 AND amount_ml <= 5000))",
+  "CREATE INDEX idx_water_entries_day ON water_entries(recorded_on DESC, id)",
+  'PRAGMA user_version = 8',
 ].join(';\n') + ';';

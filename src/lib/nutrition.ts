@@ -1,4 +1,4 @@
-import type { FoodItem, MealEntry, MealType } from '../types/gym';
+import type { FoodItem, MealEntry, MealType, NutritionTargets, WaterEntry } from '../types/gym';
 import { isCalendarDate, localDateKey } from './body-metrics.ts';
 
 export const MEAL_TYPES: readonly { kind: MealType; label: string }[] = [
@@ -83,4 +83,83 @@ export function searchFoods(foods: readonly FoodItem[], query: string, includeAr
   return foods.filter(food => (includeArchived || !food.archived) &&
     (food.name + ' ' + food.brand).toLocaleLowerCase().includes(q))
     .sort((a, b) => a.name.localeCompare(b.name) || a.brand.localeCompare(b.brand));
+}
+
+export function nutritionTotals(meals: readonly MealEntry[]): {
+  calories: number; proteinGrams: number; carbsGrams: number; fatGrams: number;
+} {
+  return meals.reduce((result, meal) => ({
+    calories: result.calories + meal.caloriesPerServing * meal.quantity,
+    proteinGrams: result.proteinGrams + meal.proteinPerServing * meal.quantity,
+    carbsGrams: result.carbsGrams + meal.carbsPerServing * meal.quantity,
+    fatGrams: result.fatGrams + meal.fatPerServing * meal.quantity,
+  }), { calories: 0, proteinGrams: 0, carbsGrams: 0, fatGrams: 0 });
+}
+
+export const EMPTY_NUTRITION_TARGETS: NutritionTargets = {
+  calories: null, proteinGrams: null, carbsGrams: null, fatGrams: null, waterMl: null,
+};
+
+export const TARGET_BOUNDS: Record<keyof NutritionTargets, number> = {
+  calories: 10000, proteinGrams: 1000, carbsGrams: 1500, fatGrams: 500, waterMl: 10000,
+};
+
+export function validateNutritionTargets(targets: NutritionTargets): void {
+  for (const key of Object.keys(TARGET_BOUNDS) as (keyof NutritionTargets)[]) {
+    const value = targets[key];
+    if (value !== null && (typeof value !== 'number' || !Number.isFinite(value) ||
+      value <= 0 || value > TARGET_BOUNDS[key])) {
+      throw new Error('Invalid nutrition target: ' + key);
+    }
+  }
+}
+
+export function validateWaterEntry(entry: WaterEntry): void {
+  if (typeof entry.id !== 'string' || !entry.id.startsWith('water:') || entry.id.length > 90 ||
+    !isCalendarDate(entry.recordedOn) || entry.recordedOn > localDateKey() ||
+    typeof entry.amountMl !== 'number' || !Number.isFinite(entry.amountMl) ||
+    entry.amountMl <= 0 || entry.amountMl > 5000) {
+    throw new Error('Invalid water entry, date, or amount');
+  }
+}
+
+export function waterOnDay(water: readonly WaterEntry[], date: string): WaterEntry[] {
+  return water.filter(item => item.recordedOn === date).sort((a,b) => a.id.localeCompare(b.id));
+}
+
+export function totalWaterMl(entries: readonly WaterEntry[]): number {
+  return entries.reduce((sum, item) => sum + item.amountMl, 0);
+}
+
+export function progressToTarget(value: number, target: number | null): {
+  percent: number; remaining: number | null; over: number | null;
+} {
+  if (target === null) return { percent: 0, remaining: null, over: null };
+  if (!Number.isFinite(value) || value < 0 || !Number.isFinite(target) || target <= 0) throw new Error('Invalid progress inputs');
+  return { percent: Math.min(100, Math.max(0, (value / target) * 100)),
+    remaining: Math.max(0, target - value), over: Math.max(0, value - target) };
+}
+
+/** A rolling local seven-day summary that counts entries on each calendar day. */
+export function sevenDayNutrition(
+  meals: readonly MealEntry[], water: readonly WaterEntry[], now = new Date(),
+): Array<{ day: string; calories: number; proteinGrams: number; carbsGrams: number;
+  fatGrams: number; waterMl: number }> {
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth(), now.getDate() - (6 - index));
+    const day = localDateKey(date);
+    return { day, ...nutritionTotals(mealsOnDay(meals, day)), waterMl: totalWaterMl(waterOnDay(water, day)) };
+  });
+}
+
+/** Grams-derived energy fraction is indicative only; user entered kcal may differ. */
+export function macroEnergySplit(grams: Pick<ReturnType<typeof nutritionTotals>,
+  'proteinGrams' | 'carbsGrams' | 'fatGrams'>): {
+  proteinPercent: number; carbsPercent: number; fatPercent: number;
+} {
+  const p = grams.proteinGrams * 4, c = grams.carbsGrams * 4, f = grams.fatGrams * 9;
+  const total = p + c + f;
+  return total > 0
+    ? { proteinPercent: (p / total) * 100, carbsPercent: (c / total) * 100, fatPercent: (f / total) * 100 }
+    : { proteinPercent: 0, carbsPercent: 0, fatPercent: 0 };
 }

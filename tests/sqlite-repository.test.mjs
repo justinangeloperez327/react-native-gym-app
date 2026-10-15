@@ -58,7 +58,7 @@ test('initialization creates foreign-keyed schema once and defaults', async () =
   try {
     const repo = new GymRepository(db);
     await repo.initialize(async () => null);
-    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 7);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 8);
     assert.equal((await db.getFirstAsync('PRAGMA foreign_keys')).foreign_keys, 1);
     assert.deepEqual(await repo.readSnapshot(), {
       version: 1, workouts: [], preferences: { unit: 'kg', theme: 'system' },
@@ -181,14 +181,14 @@ test('newer database schema is never downgraded', async () => {
 });
 
 
-test('v1 to v7 migration preserves existing workout history and preference choices', async () => {
+test('v1 to v8 migration preserves existing workout history and preference choices', async () => {
   const db = new NativeTestDatabase();
   try {
     const repo = new GymRepository(db);
     await repo.initialize(async () => JSON.stringify(sample()));
-    await db.execAsync('DROP TABLE meal_entries; DROP INDEX idx_foods_active_name; DROP TABLE foods; DROP TABLE fitness_goals; DROP INDEX idx_body_measurements_kind_date; DROP TABLE body_measurements; DROP TABLE routine_weekdays; DROP TABLE routine_exercises; DROP TABLE routine_templates; ALTER TABLE workout_sets DROP COLUMN set_type; ALTER TABLE workout_sets DROP COLUMN duration_seconds; ALTER TABLE workout_sets DROP COLUMN distance_meters; ALTER TABLE workout_movements DROP COLUMN superset_group; ALTER TABLE workout_movements DROP COLUMN rest_seconds; DROP INDEX idx_custom_exercises_name; DROP INDEX idx_custom_exercises_kind; DROP TABLE custom_exercises; ALTER TABLE workouts DROP COLUMN notes; ALTER TABLE workout_movements DROP COLUMN notes; PRAGMA user_version = 1;');
+    await db.execAsync('DROP INDEX idx_water_entries_day; DROP TABLE water_entries; DROP TABLE nutrition_targets; DROP TABLE meal_entries; DROP INDEX idx_foods_active_name; DROP TABLE foods; DROP TABLE fitness_goals; DROP INDEX idx_body_measurements_kind_date; DROP TABLE body_measurements; DROP TABLE routine_weekdays; DROP TABLE routine_exercises; DROP TABLE routine_templates; ALTER TABLE workout_sets DROP COLUMN set_type; ALTER TABLE workout_sets DROP COLUMN duration_seconds; ALTER TABLE workout_sets DROP COLUMN distance_meters; ALTER TABLE workout_movements DROP COLUMN superset_group; ALTER TABLE workout_movements DROP COLUMN rest_seconds; DROP INDEX idx_custom_exercises_name; DROP INDEX idx_custom_exercises_kind; DROP TABLE custom_exercises; ALTER TABLE workouts DROP COLUMN notes; ALTER TABLE workout_movements DROP COLUMN notes; PRAGMA user_version = 1;');
     await repo.initialize(async () => { throw new Error('Legacy data should not be read twice'); });
-    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 7);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 8);
     assert.deepEqual(await repo.readSnapshot(), sample());
     assert.deepEqual(await repo.readCustomExercises(), []);
   } finally { db.close(); }
@@ -248,7 +248,7 @@ test('failed migration to v2 rolls back version and does not delete workouts', a
   try {
     const repo = new GymRepository(db);
     await repo.initialize(async () => JSON.stringify(sample()));
-    await db.execAsync('DROP TABLE meal_entries; DROP INDEX idx_foods_active_name; DROP TABLE foods; DROP TABLE fitness_goals; DROP INDEX idx_body_measurements_kind_date; DROP TABLE body_measurements; DROP TABLE routine_weekdays; DROP TABLE routine_exercises; DROP TABLE routine_templates; DROP INDEX idx_custom_exercises_name; DROP INDEX idx_custom_exercises_kind; DROP TABLE custom_exercises; PRAGMA user_version = 1;');
+    await db.execAsync('DROP INDEX idx_water_entries_day; DROP TABLE water_entries; DROP TABLE nutrition_targets; DROP TABLE meal_entries; DROP INDEX idx_foods_active_name; DROP TABLE foods; DROP TABLE fitness_goals; DROP INDEX idx_body_measurements_kind_date; DROP TABLE body_measurements; DROP TABLE routine_weekdays; DROP TABLE routine_exercises; DROP TABLE routine_templates; DROP INDEX idx_custom_exercises_name; DROP INDEX idx_custom_exercises_kind; DROP TABLE custom_exercises; PRAGMA user_version = 1;');
     // A malformed old table causes v2's name index to fail inside its transaction.
     await db.execAsync('CREATE TABLE custom_exercises (unrelated TEXT);');
     await assert.rejects(repo.initialize(async () => null), /no such column|name/i);
@@ -274,7 +274,7 @@ test('upgrading an actual v2 database adds note fields without rewriting workout
     const repo = new GymRepository(db);
     await repo.initialize(async () => null);
     const saved = await repo.readSnapshot();
-    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 7);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 8);
     assert.equal(saved.workouts[0].id, 'old-session');
     assert.equal(saved.workouts[0].movements[0].sets[0].weightKg, 80);
     assert.equal(saved.workouts[0].notes, undefined);
@@ -373,7 +373,7 @@ test('v3 to v4 schema migration preserves existing workout data and preferences'
     await insertV3Workout(db, sample().workouts[0]);
     await repo.updatePreferences(sample().preferences);
     await repo.initialize(async () => null);
-    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 7);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 8);
     assert.deepEqual(await repo.readSnapshot(), sample());
     assert.deepEqual(await repo.readRoutines(), []);
   } finally { db.close(); }
@@ -490,7 +490,7 @@ test('v4 to v5 migration retains workouts and routine targets', async () => {
     await db.runAsync('INSERT OR IGNORE INTO routine_weekdays(routine_id, weekday) VALUES (?, ?)', original.id, 1);
     assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 4);
     await repo.initialize(async () => null);
-    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 7);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 8);
     assert.deepEqual((await repo.readSnapshot()).workouts, sample().workouts);
     assert.deepEqual(await repo.readRoutines(), [original]);
   } finally { db.close(); }
@@ -579,7 +579,7 @@ test('v5 to v7 migration preserves workouts, routines and settings', async () =>
     await repo.updatePreferences(sample().preferences);
     assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 5);
     await repo.initialize(async () => null);
-    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 7);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 8);
     assert.deepEqual(await repo.readSnapshot(), sample());
     assert.deepEqual(await repo.readMeasurements(), []);
     assert.deepEqual(await repo.readGoals(), []);
@@ -663,7 +663,7 @@ test('v6 measurement and goal failures roll back atomically', async () => {
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'body_measurements'"), null);
     await db.execAsync('DROP TABLE idx_body_measurements_kind_date');
     await repo.initialize(async () => null);
-    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 7);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 8);
   } finally { db.close(); }
 });
 
@@ -682,7 +682,7 @@ test('v6 to v7 migration retains body readings and workout history', async () =>
     await repo.saveMeasurement(weight);
     assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 6);
     await repo.initialize(async () => null);
-    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 7);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 8);
     assert.deepEqual((await repo.readSnapshot()).workouts, sample().workouts);
     assert.deepEqual(await repo.readMeasurements(), [weight]);
     assert.deepEqual(await repo.readFoods(), []);
@@ -780,6 +780,119 @@ test('v7 migration failure rolls back tables and schema version', async () => {
       "SELECT name FROM sqlite_master WHERE type='table' AND name='foods'"), null);
     await db.execAsync('DROP TABLE idx_foods_active_name');
     await repo.initialize(async () => null);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 8);
+  } finally { db.close(); }
+});
+
+
+test('upgrading v7 to v8 retains foods, meals, workouts and body records', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const { MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4,
+      MIGRATION_V5, MIGRATION_V6, MIGRATION_V7 } = await import('../src/data/migrations.ts');
+    await db.execAsync('PRAGMA foreign_keys = ON;');
+    for (const script of [MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4,
+      MIGRATION_V5, MIGRATION_V6, MIGRATION_V7]) await db.execAsync(script);
+    const repo = new GymRepository(db);
+    await repo.upsertWorkout(sample().workouts[0]);
+    const food = { id: 'food:prior', name: 'Previous food', brand: '',
+      servingGrams: 100, caloriesPerServing: 120, proteinPerServing: 8,
+      carbsPerServing: 10, fatPerServing: 4, archived: false };
+    const meal = { id: 'meal:prior', eatenOn: '2026-10-12', mealType: 'lunch', quantity: 1,
+      foodId: food.id, foodName: food.name, foodBrand: food.brand,
+      servingGrams: food.servingGrams, caloriesPerServing: food.caloriesPerServing,
+      proteinPerServing: food.proteinPerServing, carbsPerServing: food.carbsPerServing,
+      fatPerServing: food.fatPerServing };
+    await repo.saveFood(food);
+    await repo.saveMeal(meal);
     assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 7);
+    await repo.initialize(async () => null);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 8);
+    assert.deepEqual((await repo.readSnapshot()).workouts, sample().workouts);
+    assert.deepEqual(await repo.readFoods(), [food]);
+    assert.deepEqual(await repo.readMeals(), [meal]);
+    assert.deepEqual(await repo.readWaterEntries(), []);
+    assert.equal(await repo.readNutritionTargets(), null);
+  } finally { db.close(); }
+});
+
+test('optional nutrition targets save, update, clear and reject invalid values', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => null);
+    assert.equal(await repo.readNutritionTargets(), null);
+    const targets = { calories: 2100, proteinGrams: 125, carbsGrams: 230,
+      fatGrams: null, waterMl: 2200 };
+    await repo.saveNutritionTargets(targets);
+    assert.deepEqual(await repo.readNutritionTargets(), targets);
+    const next = { ...targets, calories: null, fatGrams: 60 };
+    await repo.saveNutritionTargets(next);
+    assert.deepEqual(await repo.readNutritionTargets(), next);
+    for (const patch of [{ calories: -1 }, { proteinGrams: Infinity },
+      { fatGrams: NaN }, { waterMl: 0 }, { carbsGrams: 10000 }]) {
+      await assert.rejects(repo.saveNutritionTargets({ ...targets, ...patch }), /Invalid nutrition target/);
+    }
+    db.failOn = 'INSERT INTO nutrition_targets';
+    await assert.rejects(repo.saveNutritionTargets(targets), /Simulated/);
+    db.failOn = null;
+    assert.deepEqual(await repo.readNutritionTargets(), next);
+    await repo.clearNutritionTargets();
+    assert.equal(await repo.readNutritionTargets(), null);
+  } finally { db.close(); }
+});
+
+test('water entries persist by date and can be edited or deleted independently', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => null);
+    const a = { id: 'water:one', recordedOn: '2026-10-13', amountMl: 250 };
+    const b = { id: 'water:two', recordedOn: '2026-10-14', amountMl: 500 };
+    const c = { id: 'water:three', recordedOn: '2026-10-14', amountMl: 300 };
+    for (const value of [a, b, c]) await repo.saveWaterEntry(value);
+    assert.deepEqual(await repo.readWaterEntries(), [b, c, a]);
+    await repo.saveWaterEntry({ ...a, amountMl: 450 });
+    assert.equal((await repo.readWaterEntries()).find(e => e.id === a.id).amountMl, 450);
+    assert.equal((await db.getFirstAsync('SELECT COUNT(*) AS n FROM water_entries')).n, 3);
+    await repo.deleteWaterEntry(b.id);
+    assert.deepEqual((await repo.readWaterEntries()).map(e => e.id), ['water:three', 'water:one']);
+  } finally { db.close(); }
+});
+
+test('invalid water amounts and transactional failures preserve valid history', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => null);
+    const entry = { id: 'water:valid', recordedOn: '2026-10-12', amountMl: 250 };
+    await repo.saveWaterEntry(entry);
+    for (const patch of [{ amountMl: 0 }, { amountMl: -1 }, { amountMl: 5001 },
+      { amountMl: Infinity }, { recordedOn: '2026-02-30' }, { recordedOn: '2099-01-01' }]) {
+      await assert.rejects(repo.saveWaterEntry({ ...entry, ...patch }), /Invalid water/);
+    }
+    db.failOn = 'INSERT INTO water_entries';
+    await assert.rejects(repo.saveWaterEntry({ ...entry, amountMl: 350 }), /Simulated/);
+    db.failOn = null;
+    assert.deepEqual(await repo.readWaterEntries(), [entry]);
+  } finally { db.close(); }
+});
+
+test('v8 migration rolls back when a table/index name collides', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const { MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4,
+      MIGRATION_V5, MIGRATION_V6, MIGRATION_V7 } = await import('../src/data/migrations.ts');
+    for (const script of [MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4,
+      MIGRATION_V5, MIGRATION_V6, MIGRATION_V7]) await db.execAsync(script);
+    await db.execAsync('CREATE TABLE idx_water_entries_day (id INTEGER);');
+    const repo = new GymRepository(db);
+    await assert.rejects(repo.initialize(async () => null), /already a table|already exists|index/i);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 7);
+    assert.equal(await db.getFirstAsync(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='nutrition_targets'"), null);
+    await db.execAsync('DROP TABLE idx_water_entries_day');
+    await repo.initialize(async () => null);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 8);
   } finally { db.close(); }
 });

@@ -1,10 +1,10 @@
 import { emptyGymData, isGymData, parseLegacy } from './legacy.ts';
-import { MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5, MIGRATION_V6, MIGRATION_V7, SCHEMA_VERSION } from './migrations.ts';
+import { MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5, MIGRATION_V6, MIGRATION_V7, MIGRATION_V8, SCHEMA_VERSION } from './migrations.ts';
 import { normalizeExerciseInput } from './exercises.ts';
 import { validateRoutine } from './routines.ts';
 import { assertMeasurement, assertGoal } from '../lib/body-metrics.ts';
-import { validateFood, validateMeal } from '../lib/nutrition.ts';
-import type { GymData, Preferences, Workout, WorkoutMovement, TrainingSet, Exercise, RoutineTemplate, RoutineExercise, BodyMeasurement, FitnessGoal, FoodItem, MealEntry } from '../types/gym';
+import { validateFood, validateMeal, validateNutritionTargets, validateWaterEntry } from '../lib/nutrition.ts';
+import type { GymData, Preferences, Workout, WorkoutMovement, TrainingSet, Exercise, RoutineTemplate, RoutineExercise, BodyMeasurement, FitnessGoal, FoodItem, MealEntry, NutritionTargets, WaterEntry } from '../types/gym';
 
 export type SqlParam = string | number | null;
 
@@ -44,6 +44,11 @@ type MealRow = {
   food_id: string; food_name: string; food_brand: string; serving_grams: number;
   calories_per_serving: number; protein_per_serving: number; carbs_per_serving: number; fat_per_serving: number;
 };
+type TargetRow = {
+  calories: number | null; protein_grams: number | null; carbs_grams: number | null;
+  fat_grams: number | null; water_ml: number | null;
+};
+type WaterRow = { id: string; recorded_on: string; amount_ml: number };
 type SetRow = { id: string; movement_id: string; position: number; reps: number; weight_kg: number; completed: number; duration_seconds: number | null; distance_meters: number | null; set_type: string };
 
 const LEGACY_STATUS = 'legacy_async_storage_v1';
@@ -106,6 +111,12 @@ export class GymRepository {
     if (currentVersion < 7) {
       await this.db.withExclusiveTransactionAsync(async (tx) => {
         await tx.execAsync(MIGRATION_V7);
+      });
+    }
+
+    if (currentVersion < 8) {
+      await this.db.withExclusiveTransactionAsync(async (tx) => {
+        await tx.execAsync(MIGRATION_V8);
       });
     }
 
@@ -417,6 +428,63 @@ export class GymRepository {
     if (!id.startsWith('meal:')) throw new Error('Invalid meal ID');
     await this.db.withExclusiveTransactionAsync(async tx => {
       await tx.runAsync('DELETE FROM meal_entries WHERE id = ?', id);
+    });
+  }
+
+  async readNutritionTargets(): Promise<NutritionTargets | null> {
+    const row = await this.db.getFirstAsync(
+      'SELECT calories, protein_grams, carbs_grams, fat_grams, water_ml FROM nutrition_targets WHERE id = 1',
+    ) as TargetRow | null;
+    if (!row) return null;
+    const targets: NutritionTargets = {
+      calories: row.calories, proteinGrams: row.protein_grams, carbsGrams: row.carbs_grams,
+      fatGrams: row.fat_grams, waterMl: row.water_ml,
+    };
+    validateNutritionTargets(targets);
+    return targets;
+  }
+
+  async saveNutritionTargets(targets: NutritionTargets): Promise<void> {
+    validateNutritionTargets(targets);
+    await this.db.withExclusiveTransactionAsync(async tx => {
+      await tx.runAsync(
+        'INSERT INTO nutrition_targets(id,calories,protein_grams,carbs_grams,fat_grams,water_ml) VALUES(1,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET calories=excluded.calories,protein_grams=excluded.protein_grams,carbs_grams=excluded.carbs_grams,fat_grams=excluded.fat_grams,water_ml=excluded.water_ml',
+        targets.calories, targets.proteinGrams, targets.carbsGrams, targets.fatGrams, targets.waterMl,
+      );
+    });
+  }
+
+  async clearNutritionTargets(): Promise<void> {
+    await this.db.withExclusiveTransactionAsync(async tx => {
+      await tx.runAsync('DELETE FROM nutrition_targets WHERE id = 1');
+    });
+  }
+
+  async readWaterEntries(): Promise<WaterEntry[]> {
+    const rows = await this.db.getAllAsync(
+      'SELECT id, recorded_on, amount_ml FROM water_entries ORDER BY recorded_on DESC, id',
+    ) as WaterRow[];
+    return rows.map(row => {
+      const entry: WaterEntry = { id: row.id, recordedOn: row.recorded_on, amountMl: row.amount_ml };
+      validateWaterEntry(entry);
+      return entry;
+    });
+  }
+
+  async saveWaterEntry(entry: WaterEntry): Promise<void> {
+    validateWaterEntry(entry);
+    await this.db.withExclusiveTransactionAsync(async tx => {
+      await tx.runAsync(
+        'INSERT INTO water_entries(id,recorded_on,amount_ml) VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET recorded_on=excluded.recorded_on,amount_ml=excluded.amount_ml',
+        entry.id, entry.recordedOn, entry.amountMl,
+      );
+    });
+  }
+
+  async deleteWaterEntry(id: string): Promise<void> {
+    if (!id.startsWith('water:')) throw new Error('Invalid water entry ID');
+    await this.db.withExclusiveTransactionAsync(async tx => {
+      await tx.runAsync('DELETE FROM water_entries WHERE id = ?', id);
     });
   }
 
