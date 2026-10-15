@@ -270,7 +270,7 @@ Body readings are self-reported, stored locally, and not interpreted as medical 
 - [x] Daily total calories and per-meal calorie summaries from stored entries.
 - [x] Preserve historical calorie values when foods are edited or archived.
 - [x] Validate input and test schema upgrade, transactions, migration rollback, snapshots and calculations.
-- [ ] Verify GitHub Actions CI on main.
+- [x] Verify GitHub Actions CI on main.
 - [ ] Android/iOS keyboard, accessibility, diary interaction and large food-library smoke testing.
 
 ### Group 11 boundary
