@@ -188,3 +188,12 @@ Settings now offers a read-only **Check local database integrity** action and re
 Overview now selects the most recently *finished* workout rather than the most recently started one. Workouts in the future are excluded from recent-activity summaries. Long routine lists, active sessions and the saved-food library render a limited initial batch with **Show more** controls. The JSON backup limit is enforced using UTF-8 bytes rather than JS string length. Destructive primary buttons have corrected foreground/background contrast.
 
 CI runs TypeScript, unit/SQLite integration tests, Expo SDK compatibility and production JavaScript export for Android/iOS. This export checks Metro module resolution; it does **not** prove the app is installable on physical phones. Mandatory device/manual checks remain documented in `docs/qa-device-matrix.md` and must be passed before v1.0.0.
+
+
+## Group 15 — Manual Android/iOS release builds
+
+EAS Build profiles in `eas.json` support internal Android APK/iOS previews, iOS simulator builds and production Android AAB/iOS App Store signing. Native builds are *never* automatically triggered by a push. **Actions → EAS Native Build (manual only)** requires account setup and the GitHub `EXPO_TOKEN` secret; it queues builds without submitting to either store.
+
+Run `npm run check:release-config` for repeatable EAS configuration validation. The stricter `npm run check:release-ready` is expected to fail until the app icon and real EAS project ID are committed, the publisher approves privacy/support/asset details, and native QA evidence exists for every Android/iOS test. See `docs/release.md`, `docs/qa-device-matrix.md` and the unapproved store/legal drafts.
+
+**No app version bump, EAS build, store submission, or v1.0.0 tag has been performed.** The implementation remains a prerelease while required external credentials and device tests are outstanding.

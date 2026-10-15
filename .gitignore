@@ -16,3 +16,12 @@ Thumbs.db
 *.p12
 *.mobileprovision
 *.cer
+
+# Release approvals, credentials and native build outputs
+release/release-evidence.json
+credentials.json
+*.aab
+*.apk
+*.ipa
+*.xcarchive
+*.app

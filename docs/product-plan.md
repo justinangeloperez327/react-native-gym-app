@@ -355,6 +355,31 @@ Restore **replaces** existing local data; it is not a merge operation. The user 
 ### Acceptance boundary
 Automated TypeScript, integration and bundle checks do not substitute for native end-to-end testing. Full Group 14 device QA remains an explicit **release blocker** until signed off on the test matrix in `docs/qa-device-matrix.md`. Do not tag `v1.0.0` or claim a store-ready release solely on CI success.
 
+## Group 15: Native Build Profiles and Release Readiness
+
+### Implemented in repository
+- [x] Expo EAS profile definitions: Android preview APK, iOS simulator preview, and production Android AAB/iOS store builds.
+- [x] Manual-only GitHub Actions build dispatch, explicit Expo token check, and no automatic submission, publication or tagging.
+- [x] Remote native build-number policy and commit-required build guard.
+- [x] Android auto-backup disabled for sensitive local journal data; keyboard resize explicitly set.
+- [x] Release configuration validation script and regression tests.
+- [x] Strict manual evidence gate requiring actual EAS project ownership, approved icon, privacy/support info and per-platform QA completion.
+- [x] Privacy policy and store listing **drafts** plus platform release guide and ignored QA-approval template.
+- [x] CI checks that release profiles are valid independently of release approval.
+- [ ] Verify GitHub Actions checks on committed main.
+
+### External / manual release blockers
+- [ ] Link EAS to the actual Expo account and commit generated `expo.extra.eas.projectId`.
+- [ ] Prepare approved store icon/splash/screenshot assets and real listing/privacy/support URLs.
+- [ ] Connect Expo token and signing credentials, register Google/Apple app identities and build signed candidates.
+- [ ] Install/test candidates on Android and iOS and complete all 20 cases in `docs/qa-device-matrix.md` per platform.
+- [ ] Verify no unexpected device OS backup/transfer of sensitive journal data; approve final privacy disclosures.
+- [ ] Obtain explicit release acceptance, bump `app.json` and package version to `1.0.0`, and pass strict release-readiness gate.
+- [ ] Submit to authorized internal testing tracks, monitor post-submission results, then independently authorize public rollout.
+- [ ] Publish `v1.0.0` only **after** all native, privacy and platform gates pass.
+
+**Status:** Group 15 release *infrastructure* implemented, **native builds and store release remain blocked**. No Expo account ID, code-signing credentials, approved branding or device QA evidence is available through this repository. Keep version `0.1.0` and do not tag.
+
 ## Versioning
 
 Keep the app prerelease until Group 15. Version `0.1.0` identifies the current development baseline; it is not a claim of production readiness. Publish v1.0.0 only after the complete fitness core and quality gates above are satisfied.

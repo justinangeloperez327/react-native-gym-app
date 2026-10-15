@@ -1,0 +1,80 @@
+name: EAS Native Build (manual only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Native build platform
+        type: choice
+        required: true
+        default: android
+        options:
+          - android
+          - ios
+          - all
+      profile:
+        description: Build profile (no store submission)
+        type: choice
+        required: true
+        default: preview
+        options:
+          - preview
+          - simulator
+          - production
+
+permissions:
+  contents: read
+
+concurrency:
+  group: eas-manual-${{ github.ref }}-${{ inputs.platform }}-${{ inputs.profile }}
+  cancel-in-progress: false
+
+jobs:
+  native-build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Validate project and build configuration
+        run: npm run check:release-config
+      - name: Validate requested build platform/profile
+        shell: bash
+        env:
+          PROFILE: ${{ inputs.profile }}
+          PLATFORM: ${{ inputs.platform }}
+        run: |
+          if [[ "$PROFILE" == "simulator" && "$PLATFORM" != "ios" ]]; then
+            echo "::error::Simulator builds are iOS-only"; exit 1
+          fi
+          if [[ "$PROFILE" == "production" ]]; then
+            echo "Production signing build requested manually; no store submission or publication will occur."
+          fi
+      - name: Require Expo authentication
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          if [[ -z "$EXPO_TOKEN" ]]; then
+            echo "::error::Set EXPO_TOKEN in repository Actions secrets before using manual EAS builds."
+            exit 1
+          fi
+      - uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          packager: npm
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Queue signed native build on EAS
+        env:
+          PLATFORM: ${{ inputs.platform }}
+          PROFILE: ${{ inputs.profile }}
+        run: eas build --platform "$PLATFORM" --profile "$PROFILE" --non-interactive --no-wait
+      - name: Release policy
+        run: |
+          echo "Builds are queued manually; no submission, rollout, tag, or release is performed."
+          echo "Native device tests and store/legal approval are still required before release."

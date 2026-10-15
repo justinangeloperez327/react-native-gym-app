@@ -27,6 +27,8 @@ jobs:
         run: npm run typecheck
       - name: Unit tests
         run: npm run test
+      - name: Validate native release profiles
+        run: npm run check:release-config
       - name: Expo SDK dependency compatibility
         run: npm run check:expo
       - name: Bundle production JavaScript for Android and iOS

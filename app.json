@@ -17,7 +17,9 @@
     },
     "android": {
       "package": "com.justinangeloperez.gymapp",
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "allowBackup": false,
+      "softwareKeyboardLayoutMode": "resize"
     },
     "plugins": [
       "expo-router"
