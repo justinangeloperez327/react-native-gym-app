@@ -1,9 +1,10 @@
 import { emptyGymData, isGymData, parseLegacy } from './legacy.ts';
-import { MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5, MIGRATION_V6, SCHEMA_VERSION } from './migrations.ts';
+import { MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5, MIGRATION_V6, MIGRATION_V7, SCHEMA_VERSION } from './migrations.ts';
 import { normalizeExerciseInput } from './exercises.ts';
 import { validateRoutine } from './routines.ts';
 import { assertMeasurement, assertGoal } from '../lib/body-metrics.ts';
-import type { GymData, Preferences, Workout, WorkoutMovement, TrainingSet, Exercise, RoutineTemplate, RoutineExercise, BodyMeasurement, FitnessGoal } from '../types/gym';
+import { validateFood, validateMeal } from '../lib/nutrition.ts';
+import type { GymData, Preferences, Workout, WorkoutMovement, TrainingSet, Exercise, RoutineTemplate, RoutineExercise, BodyMeasurement, FitnessGoal, FoodItem, MealEntry } from '../types/gym';
 
 export type SqlParam = string | number | null;
 
@@ -34,6 +35,15 @@ type RoutineExerciseRow = { id: string; routine_id: string; exercise_id: string;
 type RoutineDayRow = { routine_id: string; weekday: number };
 type BodyRow = { id: string; kind: BodyMeasurement['kind']; recorded_on: string; value: number; notes: string };
 type GoalRow = { id: string; kind: FitnessGoal['kind']; created_on: string; start_value: number; target_value: number };
+type FoodRow = {
+  id: string; name: string; brand: string; serving_grams: number; calories_per_serving: number;
+  protein_per_serving: number; carbs_per_serving: number; fat_per_serving: number; archived: number;
+};
+type MealRow = {
+  id: string; eaten_on: string; meal_type: MealEntry['mealType']; quantity: number;
+  food_id: string; food_name: string; food_brand: string; serving_grams: number;
+  calories_per_serving: number; protein_per_serving: number; carbs_per_serving: number; fat_per_serving: number;
+};
 type SetRow = { id: string; movement_id: string; position: number; reps: number; weight_kg: number; completed: number; duration_seconds: number | null; distance_meters: number | null; set_type: string };
 
 const LEGACY_STATUS = 'legacy_async_storage_v1';
@@ -90,6 +100,12 @@ export class GymRepository {
     if (currentVersion < 6) {
       await this.db.withExclusiveTransactionAsync(async (tx) => {
         await tx.execAsync(MIGRATION_V6);
+      });
+    }
+
+    if (currentVersion < 7) {
+      await this.db.withExclusiveTransactionAsync(async (tx) => {
+        await tx.execAsync(MIGRATION_V7);
       });
     }
 
@@ -331,6 +347,76 @@ export class GymRepository {
   async deleteGoal(id: string): Promise<void> {
     await this.db.withExclusiveTransactionAsync(async tx => {
       await tx.runAsync('DELETE FROM fitness_goals WHERE id = ?', id);
+    });
+  }
+
+  async readFoods(): Promise<FoodItem[]> {
+    const rows = await this.db.getAllAsync(
+      'SELECT id, name, brand, serving_grams, calories_per_serving, protein_per_serving, carbs_per_serving, fat_per_serving, archived FROM foods ORDER BY name COLLATE NOCASE, id',
+    ) as FoodRow[];
+    return rows.map(row => {
+      const food: FoodItem = {
+        id: row.id, name: row.name, brand: row.brand, servingGrams: row.serving_grams,
+        caloriesPerServing: row.calories_per_serving, proteinPerServing: row.protein_per_serving,
+        carbsPerServing: row.carbs_per_serving, fatPerServing: row.fat_per_serving,
+        archived: row.archived === 1,
+      };
+      validateFood(food);
+      return food;
+    });
+  }
+
+  async saveFood(food: FoodItem): Promise<void> {
+    validateFood(food);
+    await this.db.withExclusiveTransactionAsync(async tx => {
+      await tx.runAsync(
+        'INSERT INTO foods(id,name,brand,serving_grams,calories_per_serving,protein_per_serving,carbs_per_serving,fat_per_serving,archived) VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET name=excluded.name, brand=excluded.brand, serving_grams=excluded.serving_grams, calories_per_serving=excluded.calories_per_serving, protein_per_serving=excluded.protein_per_serving, carbs_per_serving=excluded.carbs_per_serving, fat_per_serving=excluded.fat_per_serving, archived=excluded.archived',
+        food.id, food.name.trim(), food.brand.trim(), food.servingGrams, food.caloriesPerServing,
+        food.proteinPerServing, food.carbsPerServing, food.fatPerServing, food.archived ? 1 : 0,
+      );
+    });
+  }
+
+  async archiveFood(id: string): Promise<void> {
+    if (!id.startsWith('food:')) throw new Error('Invalid food ID');
+    await this.db.withExclusiveTransactionAsync(async tx => {
+      await tx.runAsync('UPDATE foods SET archived = 1 WHERE id = ?', id);
+    });
+  }
+
+  async readMeals(): Promise<MealEntry[]> {
+    const rows = await this.db.getAllAsync(
+      'SELECT id,eaten_on,meal_type,quantity,food_id,food_name,food_brand,serving_grams,calories_per_serving,protein_per_serving,carbs_per_serving,fat_per_serving FROM meal_entries ORDER BY eaten_on DESC, meal_type, id',
+    ) as MealRow[];
+    return rows.map(row => {
+      const entry: MealEntry = {
+        id: row.id, eatenOn: row.eaten_on, mealType: row.meal_type, quantity: row.quantity,
+        foodId: row.food_id, foodName: row.food_name, foodBrand: row.food_brand,
+        servingGrams: row.serving_grams, caloriesPerServing: row.calories_per_serving,
+        proteinPerServing: row.protein_per_serving, carbsPerServing: row.carbs_per_serving,
+        fatPerServing: row.fat_per_serving,
+      };
+      validateMeal(entry);
+      return entry;
+    });
+  }
+
+  async saveMeal(entry: MealEntry): Promise<void> {
+    validateMeal(entry);
+    await this.db.withExclusiveTransactionAsync(async tx => {
+      await tx.runAsync(
+        'INSERT INTO meal_entries(id,eaten_on,meal_type,quantity,food_id,food_name,food_brand,serving_grams,calories_per_serving,protein_per_serving,carbs_per_serving,fat_per_serving) VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET eaten_on=excluded.eaten_on, meal_type=excluded.meal_type, quantity=excluded.quantity, food_id=excluded.food_id, food_name=excluded.food_name, food_brand=excluded.food_brand, serving_grams=excluded.serving_grams, calories_per_serving=excluded.calories_per_serving, protein_per_serving=excluded.protein_per_serving, carbs_per_serving=excluded.carbs_per_serving, fat_per_serving=excluded.fat_per_serving',
+        entry.id, entry.eatenOn, entry.mealType, entry.quantity, entry.foodId, entry.foodName,
+        entry.foodBrand, entry.servingGrams, entry.caloriesPerServing, entry.proteinPerServing,
+        entry.carbsPerServing, entry.fatPerServing,
+      );
+    });
+  }
+
+  async deleteMeal(id: string): Promise<void> {
+    if (!id.startsWith('meal:')) throw new Error('Invalid meal ID');
+    await this.db.withExclusiveTransactionAsync(async tx => {
+      await tx.runAsync('DELETE FROM meal_entries WHERE id = ?', id);
     });
   }
 

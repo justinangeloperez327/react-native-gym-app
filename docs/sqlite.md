@@ -71,3 +71,11 @@ The v6 transaction introduces `body_measurements` with a unique (kind, recorded_
 `fitness_goals` stores one goal per kind: body_weight (starting and target weights in kg) or weekly_workouts (integer sessions/week, starting at zero). Goals use a stable ID across target edits. Goal progression is computed dynamically from existing body measurements and completed workouts, not persisted as a counter.
 
 Readings, goals and deletions use confirmed, exclusive SQLite transactions. An unsuccessful save leaves in-memory lists unchanged. Neither deleting a measurement nor removing a goal changes any workout history.
+
+## Schema version 7 — personal foods and meal history
+
+`foods` stores user-defined food names, optional brand, serving mass in grams, calories per serving and optional stored protein/carbohydrate/fat values per serving. Archiving is soft; the record is retained and excluded from new diary selection. No external food database or automatically seeded nutrition catalog is used.
+
+`meal_entries` stores local-date `eaten_on`, meal type (breakfast/lunch/dinner/snack), serving multiplier, historical food identity and **all nutrition values copied at log time**. Entries do not cascade from foods: editing/archiving a food never changes previously saved meals. Quantity edits only change the serving multiplier on that snapshot.
+
+All writes are validated and run in exclusive SQLite transactions. Date rules reject future/noncalendar days. The default nutrition screen calculates daily kcal by summing `quantity * calories_per_serving` of entries for the selected date. Group 11 will add detailed macro targets, hydration, and goal comparisons.

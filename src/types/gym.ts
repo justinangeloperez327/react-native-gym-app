@@ -66,3 +66,30 @@ export type FitnessGoal = {
   startValue: number; // kg baseline for body_weight, 0 for weekly_workouts
   targetValue: number; // kg for body_weight, sessions/week for weekly_workouts
 };
+
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+export type FoodItem = {
+  id: string;
+  name: string;
+  brand: string;
+  servingGrams: number;
+  caloriesPerServing: number;
+  proteinPerServing: number;
+  carbsPerServing: number;
+  fatPerServing: number;
+  archived: boolean;
+};
+export type MealEntry = {
+  id: string;
+  eatenOn: string; // YYYY-MM-DD in device-local calendar
+  mealType: MealType;
+  quantity: number; // Multiplier of the food's serving size
+  foodId: string; // Historical reference; food can later be archived
+  foodName: string; // Immutable snapshot at time of logging
+  foodBrand: string;
+  servingGrams: number;
+  caloriesPerServing: number;
+  proteinPerServing: number;
+  carbsPerServing: number;
+  fatPerServing: number;
+};

@@ -142,3 +142,13 @@ Storage is canonical: **kilograms for body weight and centimetres for circumfere
 Set one target each for **body weight** and **completed workouts per week**. Weight-goal progress is calculated from the body weight recorded when the goal is first created, with direction-aware progress for weight gain or loss. Weekly frequency counts completed sessions from the current device-local Monday to Sunday and resets with each new week. Targets can be edited or removed independently of the measurements or workout history.
 
 These are user-entered fitness targets only, not medical recommendations. The app does not calculate BMI, prescribe an ideal weight, create diet advice or upload body measurements to a server. Native device and large-history verification remain required.
+
+## Nutrition and meal logging (Group 10)
+
+The **Nutrition** tab now provides a fully offline meal diary and a user-managed food library. You can create, edit or archive foods, search by name/brand, and record foods under Breakfast, Lunch, Dinner or Snacks on valid current or past diary dates. Each food defines its serving size in grams and its **calories per serving**, taken from the product label or another source selected by the user. No food data is automatically invented or fetched from a remote service.
+
+Add any number of servings from 0.05 to 50, then view the day's calorie total and the breakdown per meal. Existing entries can be adjusted for quantity or deleted. The diary stores a **nutrition snapshot** when an entry is created, so changing the food's name or calorie values later never silently rewrites historical intake. Archived foods are excluded from new selections while existing diary entries remain intact.
+
+SQLite schema **version 7** adds `foods` and `meal_entries`. Both use confirmed transactions and keep training and body-measurement data unchanged. The food editor can also store protein/carbohydrate/fat values per serving for future use, but calculated macro targets, hydration, daily target comparisons, and detailed nutrition reporting are **Group 11** functionality. Zero macro fields are not automatically verified nutrition values.
+
+A personal nutrition diary is not a medical assessment or a guarantee of nutritional accuracy. User-entered food values and quantities determine the displayed calorie estimates.

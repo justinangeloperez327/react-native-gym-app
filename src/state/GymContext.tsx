@@ -7,7 +7,7 @@ import { emptyGymData, LEGACY_KEY } from '@/src/data/legacy';
 import type { GymRepository } from '@/src/data/gym-repository';
 import { createId, previousCompletedSets, defaultSetForTracking, copySetForNewSession } from '@/src/lib/workouts';
 import { buildStarterRoutine, createRoutineTemplate, duplicateRoutineTemplate, routineToWorkout, validateRoutine } from '@/src/data/routines';
-import type { Exercise, ExerciseInput, GymData, Preferences, TrainingSet, Workout, WorkoutMovement, RoutineTemplate, BodyMeasurement, FitnessGoal } from '@/src/types/gym';
+import type { Exercise, ExerciseInput, GymData, Preferences, TrainingSet, Workout, WorkoutMovement, RoutineTemplate, BodyMeasurement, FitnessGoal, FoodItem, MealEntry } from '@/src/types/gym';
 
 type GymContextValue = {
   ready: boolean;
@@ -20,6 +20,12 @@ type GymContextValue = {
   routines: RoutineTemplate[];
   measurements: BodyMeasurement[];
   goals: FitnessGoal[];
+  foods: FoodItem[];
+  meals: MealEntry[];
+  saveFood: (food: FoodItem) => Promise<void>;
+  archiveFood: (id: string) => Promise<void>;
+  saveMeal: (entry: MealEntry) => Promise<void>;
+  deleteMeal: (id: string) => Promise<void>;
   saveBodyMeasurement: (entry: BodyMeasurement) => Promise<void>;
   deleteBodyMeasurement: (id: string) => Promise<void>;
   saveFitnessGoal: (goal: FitnessGoal) => Promise<void>;
@@ -68,6 +74,10 @@ export function GymProvider({ children }: { children: ReactNode }) {
   const [goals, setGoals] = useState<FitnessGoal[]>([]);
   const measurementsRef = useRef<BodyMeasurement[]>([]);
   const goalsRef = useRef<FitnessGoal[]>([]);
+  const [foods, setFoods] = useState<FoodItem[]>([]);
+  const [meals, setMeals] = useState<MealEntry[]>([]);
+  const foodsRef = useRef<FoodItem[]>([]);
+  const mealsRef = useRef<MealEntry[]>([]);
   const routinesRef = useRef<RoutineTemplate[]>([]);
   const customRef = useRef<Exercise[]>([]);
   const latestRef = useRef<GymData>(data);
@@ -89,6 +99,8 @@ export function GymProvider({ children }: { children: ReactNode }) {
         const savedRoutines = await repository.readRoutines();
         const savedMeasurements = await repository.readMeasurements();
         const savedGoals = await repository.readGoals();
+        const savedFoods = await repository.readFoods();
+        const savedMeals = await repository.readMeals();
         if (!mountedRef.current) return;
         repositoryRef.current = repository;
         latestRef.current = restored;
@@ -101,6 +113,10 @@ export function GymProvider({ children }: { children: ReactNode }) {
         setMeasurements(savedMeasurements);
         goalsRef.current = savedGoals;
         setGoals(savedGoals);
+        foodsRef.current = savedFoods;
+        setFoods(savedFoods);
+        mealsRef.current = savedMeals;
+        setMeals(savedMeals);
         setReady(true);
       } catch (cause) {
         if (!mountedRef.current) return;
@@ -350,6 +366,40 @@ export function GymProvider({ children }: { children: ReactNode }) {
     setGoals(next);
   }, [commitConfirmed]);
 
+  const saveFood = useCallback(async (food: FoodItem): Promise<void> => {
+    await commitConfirmed(repo => repo.saveFood(food));
+    const next = [food, ...foodsRef.current.filter(item => item.id !== food.id)]
+      .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+    foodsRef.current = next;
+    setFoods(next);
+  }, [commitConfirmed]);
+
+  const archiveFood = useCallback(async (id: string): Promise<void> => {
+    if (!foodsRef.current.some(food => food.id === id && !food.archived)) {
+      throw new Error('Active food not found');
+    }
+    await commitConfirmed(repo => repo.archiveFood(id));
+    const next = foodsRef.current.map(food => food.id === id ? { ...food, archived: true } : food);
+    foodsRef.current = next;
+    setFoods(next);
+  }, [commitConfirmed]);
+
+  const saveMeal = useCallback(async (entry: MealEntry): Promise<void> => {
+    await commitConfirmed(repo => repo.saveMeal(entry));
+    const next = [entry, ...mealsRef.current.filter(meal => meal.id !== entry.id)]
+      .sort((a, b) => b.eatenOn.localeCompare(a.eatenOn) || a.id.localeCompare(b.id));
+    mealsRef.current = next;
+    setMeals(next);
+  }, [commitConfirmed]);
+
+  const deleteMeal = useCallback(async (id: string): Promise<void> => {
+    if (!mealsRef.current.some(meal => meal.id === id)) throw new Error('Meal not found');
+    await commitConfirmed(repo => repo.deleteMeal(id));
+    const next = mealsRef.current.filter(meal => meal.id !== id);
+    mealsRef.current = next;
+    setMeals(next);
+  }, [commitConfirmed]);
+
   const applyWorkout = useCallback((
     id: string,
     operation: (workout: Workout) => Workout,
@@ -556,6 +606,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
       customExercises, createCustomExercise, updateCustomExercise, archiveCustomExercise,
       routines, saveRoutine, createRoutine, importStarterRoutine, duplicateRoutine, deleteRoutine, startRoutineWorkout,
       measurements, goals, saveBodyMeasurement, deleteBodyMeasurement, saveFitnessGoal, deleteFitnessGoal,
+      foods, meals, saveFood, archiveFood, saveMeal, deleteMeal,
       startWorkout, addMovement, setRestSeconds, toggleSupersetWithPrevious, addSet, removeSet, copyPreviousSets,
       setWorkoutNotes, setMovementNotes, updateSet, removeMovement,
       finishWorkout, deleteWorkout, updatePreferences,

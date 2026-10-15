@@ -258,6 +258,24 @@ Only completed sets from finished workouts count. Warmups count for volume but d
 ### Data boundaries
 Body readings are self-reported, stored locally, and not interpreted as medical assessments. No BMI or normative ideal-body-weight calculations are made. Weekly targets use completed workouts in the current local Monday–Sunday period. Removing a goal never removes training or measurement records.
 
+## Group 10: Nutrition and Meal Logging
+
+### Implemented
+- [x] SQLite schema v7 with personal foods and historically stable meal-entry snapshots.
+- [x] Create/edit/archive foods, using serving grams and calories per serving, optional brand and macro fields.
+- [x] Search personal foods by name and brand; hide archived foods from new meal selection.
+- [x] Log breakfast, lunch, dinner and snacks with configurable serving quantities.
+- [x] Select past or current diary dates; no future date entries.
+- [x] Edit serving quantity or delete an individual meal.
+- [x] Daily total calories and per-meal calorie summaries from stored entries.
+- [x] Preserve historical calorie values when foods are edited or archived.
+- [x] Validate input and test schema upgrade, transactions, migration rollback, snapshots and calculations.
+- [ ] Verify GitHub Actions CI on main.
+- [ ] Android/iOS keyboard, accessibility, diary interaction and large food-library smoke testing.
+
+### Group 11 boundary
+Daily calorie targets, macro goals/calculations, hydration logging and nutrition target comparisons are not implemented in Group 10. Foods have no synthetic defaults; users manually enter label/source values. Logged calories are estimates derived from user-entered records.
+
 ## Versioning
 
 Keep the app prerelease until Group 15. Version `0.1.0` identifies the current development baseline; it is not a claim of production readiness. Publish v1.0.0 only after the complete fitness core and quality gates above are satisfied.

@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 6;
+export const SCHEMA_VERSION = 7;
 
 /** PRAGMA user_version advances atomically with the DDL transaction. */
 export const MIGRATION_V1 = [
@@ -57,4 +57,12 @@ export const MIGRATION_V6 = [
   "CREATE INDEX idx_body_measurements_kind_date ON body_measurements(kind, recorded_on DESC)",
   "CREATE TABLE fitness_goals (id TEXT PRIMARY KEY NOT NULL, kind TEXT NOT NULL UNIQUE CHECK(kind IN ('body_weight','weekly_workouts')), created_on TEXT NOT NULL, start_value REAL NOT NULL, target_value REAL NOT NULL)",
   'PRAGMA user_version = 6',
+].join(';\n') + ';';
+
+export const MIGRATION_V7 = [
+  "CREATE TABLE foods (id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL COLLATE NOCASE, brand TEXT NOT NULL DEFAULT '', serving_grams REAL NOT NULL CHECK(serving_grams > 0), calories_per_serving REAL NOT NULL CHECK(calories_per_serving >= 0), protein_per_serving REAL NOT NULL DEFAULT 0 CHECK(protein_per_serving >= 0), carbs_per_serving REAL NOT NULL DEFAULT 0 CHECK(carbs_per_serving >= 0), fat_per_serving REAL NOT NULL DEFAULT 0 CHECK(fat_per_serving >= 0), archived INTEGER NOT NULL DEFAULT 0 CHECK(archived IN (0,1)))",
+  "CREATE INDEX idx_foods_active_name ON foods(archived, name COLLATE NOCASE)",
+  "CREATE TABLE meal_entries (id TEXT PRIMARY KEY NOT NULL, eaten_on TEXT NOT NULL, meal_type TEXT NOT NULL CHECK(meal_type IN ('breakfast','lunch','dinner','snack')), quantity REAL NOT NULL CHECK(quantity > 0), food_id TEXT NOT NULL, food_name TEXT NOT NULL, food_brand TEXT NOT NULL DEFAULT '', serving_grams REAL NOT NULL CHECK(serving_grams > 0), calories_per_serving REAL NOT NULL CHECK(calories_per_serving >= 0), protein_per_serving REAL NOT NULL CHECK(protein_per_serving >= 0), carbs_per_serving REAL NOT NULL CHECK(carbs_per_serving >= 0), fat_per_serving REAL NOT NULL CHECK(fat_per_serving >= 0))",
+  "CREATE INDEX idx_meal_entries_date_type ON meal_entries(eaten_on DESC, meal_type, id)",
+  'PRAGMA user_version = 7',
 ].join(';\n') + ';';

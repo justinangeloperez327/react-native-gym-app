@@ -31,6 +31,7 @@ function Navigation() {
         <Stack.Screen name="routine/[id]" />
         <Stack.Screen name="exercise-progress/[id]" />
         <Stack.Screen name="body" />
+        <Stack.Screen name="food-editor" />
       </Stack>
     </>
   );
