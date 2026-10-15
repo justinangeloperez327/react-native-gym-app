@@ -139,3 +139,17 @@ test('an empty history yields no fabricated records or sessions', () => {
   assert.throws(() => weeklyTrends([], new Date(), 0), /Invalid/);
   assert.throws(() => weeklyTrends([], new Date(), 53), /Invalid/);
 });
+
+
+test('multiple movement rows for the same exercise in an imported workout count as one session', () => {
+  const imported = workout('legacy-duplicates', 11, [
+    movement('first-copy', 'bench-press', [set('first', { reps: 5, weightKg: 90 })]),
+    movement('second-copy', 'bench-press', [set('second', { reps: 8, weightKg: 75 })]),
+  ]);
+  const sessions = exerciseSessions([imported], 'bench-press');
+  assert.equal(sessions.length, 1);
+  assert.equal(sessions[0].sets, 2);
+  assert.equal(sessions[0].bestWeightKg, 90);
+  assert.equal(sessions[0].volumeKg, 5 * 90 + 8 * 75);
+  assert.equal(exercisesInHistory([imported]).find(entry => entry.id === 'bench-press').sessions, 1);
+});

@@ -119,24 +119,27 @@ export function estimatedOneRepMaxKg(weightKg: number, reps: number): number {
 }
 
 export function exerciseSessions(workouts: readonly Workout[], exerciseId: string): ExerciseSession[] {
-  return finishedWorkouts(workouts).flatMap(workout => workout.movements
-    .filter(m => m.exerciseId === exerciseId)
-    .map(movement => {
-      const completed = movement.sets.filter(s => s.completed);
-      const strength = completed.filter(eligibleForStrengthPr);
-      return {
-        workoutId: workout.id,
-        date: workout.finishedAt!,
-        sets: completed.length,
-        volumeKg: completed.reduce((sum, set) => sum + set.reps * set.weightKg, 0),
-        bestWeightKg: strength.reduce((best, set) => Math.max(best, set.weightKg), 0),
-        bestReps: strength.reduce((best, set) => Math.max(best, set.reps), 0),
-        distanceMeters: completed.reduce((sum, set) => sum + (set.distanceMeters ?? 0), 0),
-        durationSeconds: completed.reduce((sum, set) => sum + (set.durationSeconds ?? 0), 0),
-        bestEstimatedOneRepMaxKg: strength.reduce((best, set) =>
-          Math.max(best, estimatedOneRepMaxKg(set.weightKg, set.reps)), 0),
-      };
-    })).filter(session => session.sets > 0).reverse(); // oldest to latest
+  return finishedWorkouts(workouts).flatMap(workout => {
+    // Import data may contain multiple movement rows for one exercise. Combine
+    // them into one session, preserving all its completed sets and only one date.
+    const completed = workout.movements
+      .filter(movement => movement.exerciseId === exerciseId)
+      .flatMap(movement => movement.sets.filter(set => set.completed));
+    if (!completed.length) return [];
+    const strength = completed.filter(eligibleForStrengthPr);
+    return [{
+      workoutId: workout.id,
+      date: workout.finishedAt!,
+      sets: completed.length,
+      volumeKg: completed.reduce((sum, set) => sum + set.reps * set.weightKg, 0),
+      bestWeightKg: strength.reduce((best, set) => Math.max(best, set.weightKg), 0),
+      bestReps: strength.reduce((best, set) => Math.max(best, set.reps), 0),
+      distanceMeters: completed.reduce((sum, set) => sum + (set.distanceMeters ?? 0), 0),
+      durationSeconds: completed.reduce((sum, set) => sum + (set.durationSeconds ?? 0), 0),
+      bestEstimatedOneRepMaxKg: strength.reduce((best, set) =>
+        Math.max(best, estimatedOneRepMaxKg(set.weightKg, set.reps)), 0),
+    }];
+  }).reverse(); // Oldest finished session to latest.
 }
 
 export type PersonalRecord = {
@@ -188,8 +191,10 @@ export type ExerciseHistoryOption = { id: string; sessions: number; lastUsed: st
 export function exercisesInHistory(workouts: readonly Workout[]): ExerciseHistoryOption[] {
   const entries = new Map<string, ExerciseHistoryOption>();
   for (const workout of finishedWorkouts(workouts)) {
+    const seen = new Set<string>();
     for (const movement of workout.movements) {
-      if (!movement.sets.some(s => s.completed)) continue;
+      if (!movement.sets.some(s => s.completed) || seen.has(movement.exerciseId)) continue;
+      seen.add(movement.exerciseId);
       const previous = entries.get(movement.exerciseId);
       if (previous) previous.sessions++;
       else entries.set(movement.exerciseId, {

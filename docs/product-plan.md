@@ -234,7 +234,7 @@ The Group 4 catalog initially contained cardio as library-only. Group 7 subseque
 - [x] Best weight, most repetitions and estimated one-rep maximum for strength movements.
 - [x] Cardio duration/distance records and archived custom exercise lookups.
 - [x] Tests covering incomplete sessions, future dates, record ties and week boundaries.
-- [ ] Confirm CI on main.
+- [x] Confirm CI on main.
 - [ ] Android/iOS large-text, legibility and large-history performance verification.
 
 ### Metric definitions
