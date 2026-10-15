@@ -1,5 +1,11 @@
 import { router } from 'expo-router';
-import { Pressable, Text, View } from 'react-native';
+import { Alert, Pressable, Text, View } from 'react-native';
+import { useState } from 'react';
+import { File, Paths } from 'expo-file-system';
+import * as DocumentPicker from 'expo-document-picker';
+import * as Sharing from 'expo-sharing';
+import { BACKUP_MAX_BYTES, describeBackup, parseBackup } from '@/src/data/backup';
+import type { GymBackup } from '@/src/types/gym';
 import { AppButton, Heading, Page, Panel, SectionTitle } from '@/src/components/ui';
 import { useGym } from '@/src/state/GymContext';
 import { useAppTheme } from '@/src/theme/colors';
@@ -29,8 +35,75 @@ function Option<T extends string>({
 }
 
 export default function SettingsScreen() {
-  const { preferences, updatePreferences } = useGym();
+  const { preferences, updatePreferences, exportBackup, restoreBackup, saveStatus } = useGym();
+  const [busy, setBusy] = useState(false);
+  const [pending, setPending] = useState<GymBackup | null>(null);
+  const [issue, setIssue] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const { colors } = useAppTheme();
+  async function shareBackup() {
+    if (busy) return;
+    setBusy(true); setIssue(null); setNotice(null);
+    try {
+      if (!await Sharing.isAvailableAsync()) {
+        throw new Error('File sharing is not available on this device.');
+      }
+      const data = await exportBackup();
+      const filename = 'gym-journal-backup-' + new Date().toISOString().slice(0, 10) +
+        '-' + Date.now() + '.json';
+      const file = new File(Paths.cache, filename);
+      file.create();
+      file.write(data);
+      await Sharing.shareAsync(file.uri, { mimeType: 'application/json', dialogTitle: 'Save gym journal backup' });
+      setNotice('Share sheet closed. Verify that your backup file was actually saved outside the app.');
+    } catch (cause) {
+      setIssue(cause instanceof Error ? cause.message : 'Unable to share backup');
+    } finally { setBusy(false); }
+  }
+
+  async function chooseBackup() {
+    if (busy) return;
+    setBusy(true); setPending(null); setIssue(null); setNotice(null);
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/json', 'text/plain'], copyToCacheDirectory: true, multiple: false,
+      });
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if (!asset) throw new Error('No file was selected');
+      if (asset.size !== undefined && asset.size > BACKUP_MAX_BYTES)
+        throw new Error('Selected file exceeds the 12 MB backup limit.');
+      const file = new File(asset.uri);
+      if (file.size > BACKUP_MAX_BYTES) throw new Error('Selected file is too large.');
+      const data = await file.text();
+      const parsed = parseBackup(data);
+      setPending(parsed);
+      setNotice('File validated. Review the contents before replacing local data.');
+    } catch (cause) {
+      setIssue(cause instanceof Error ? cause.message : 'Unable to open backup');
+    } finally { setBusy(false); }
+  }
+
+  function confirmRestore() {
+    if (!pending || busy) return;
+    const backup = pending;
+    Alert.alert('Replace all local data?', [
+      'This permanently replaces every workout, food, meal, measurement, goal, water log and recovery entry on this device.',
+      'Back up the current journal before continuing. This cannot be undone inside the app.',
+    ].join('\n\n'), [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Replace all data', style: 'destructive', onPress: () => {
+        setBusy(true); setIssue(null); setNotice(null);
+        void restoreBackup(backup).then(() => {
+          setPending(null);
+          setNotice('Backup restored successfully. All journal sections were replaced.');
+        }).catch(cause => {
+          setIssue(cause instanceof Error ? cause.message : 'Restore failed; original database retained.');
+        }).finally(() => setBusy(false));
+      }},
+    ]);
+  }
+
   return (
     <Page>
       <View style={{ alignSelf: 'flex-start' }}>
@@ -70,12 +143,40 @@ export default function SettingsScreen() {
         </Panel>
       </View>
       <View style={{ gap: 10 }}>
-        <SectionTitle>On-device data</SectionTitle>
+        <SectionTitle>Backup and restore</SectionTitle>
         <Panel>
-          <Text style={{ color: colors.text, fontWeight: '600' }}>Local-first</Text>
+          <Text style={{ color: colors.text, fontWeight: '600' }}>Local-first data ownership</Text>
           <Text style={{ color: colors.muted, lineHeight: 20, fontSize: 13 }}>
-            Workout history is saved on this device. Cloud sync and backup are not available yet.
-            Removing the app or clearing its storage may permanently delete your records.
+            Your fitness records are stored on this device. A JSON backup includes workouts,
+            routines, foods, meals, body measurements, goals and recovery check-ins.
+            It is not encrypted. Store it privately outside the app.
+          </Text>
+          <AppButton title={busy ? 'Working…' : 'Export full JSON backup'}
+            disabled={busy || saveStatus === 'saving'} onPress={() => { void shareBackup(); }} />
+          <AppButton title="Choose JSON file to restore" secondary disabled={busy}
+            onPress={() => { void chooseBackup(); }} />
+          {pending ? (
+            <View style={{ gap: 8, borderTopWidth: 1, borderColor: colors.border, paddingTop: 12 }}>
+              <Text style={{ color: colors.text, fontWeight: '600' }}>Selected backup</Text>
+              <Text style={{ color: colors.muted, fontSize: 13 }}>
+                Created {new Date(pending.createdAt).toLocaleString()}
+              </Text>
+              <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 20 }}>
+                {describeBackup(pending)}
+              </Text>
+              <Text style={{ color: colors.danger, fontSize: 13, lineHeight: 19 }}>
+                Restore replaces ALL current local data, not just missing records.
+              </Text>
+              <AppButton title="Replace local data from backup" secondary destructive
+                disabled={busy} onPress={confirmRestore} />
+              <AppButton title="Cancel restore" secondary onPress={() => setPending(null)} />
+            </View>
+          ) : null}
+          {issue ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{issue}</Text> : null}
+          {notice ? <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 19 }}>{notice}</Text> : null}
+          <Text style={{ color: colors.muted, lineHeight: 20, fontSize: 12 }}>
+            No automatic or cloud backup is provided. Deleting the app or clearing storage can
+            permanently erase records. Keep your backup somewhere you control.
           </Text>
         </Panel>
       </View>

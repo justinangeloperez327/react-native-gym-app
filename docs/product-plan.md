@@ -310,6 +310,24 @@ No preset calorie, macro or water intake targets are assigned. Food nutrition is
 ### Data and interpretation boundaries
 All observations are optional and self-reported. Missing data never counts as an actual zero rating or zero hours of sleep. Training context is descriptive, not a causal analysis or clinical correlation. There is no medical sleep recommendation, readiness score, automated health inference or notifications. Physical-device behavior remains unverified.
 
+## Group 13: Onboarding, Settings and Data Portability
+
+### Implemented
+- [x] First-launch walkthrough (skippable) and persistent local completion state; existing journals do not get interrupted.
+- [x] Settings retains kg/lb and light/dark/system appearance preferences.
+- [x] System-share JSON file export of complete local training, nutrition, hydration, body and recovery data.
+- [x] System document picker import with format/version/size validation and clear preview of record counts.
+- [x] Explicit double-confirmation before full replacement and warnings against accidental loss.
+- [x] One exclusive SQLite restore transaction across all journal tables, with rollback on any failure.
+- [x] Backward-compatible export schema v1 separate from SQLite schema v9 and legacy migrations.
+- [x] Saved data and UI state refresh only after durable restore.
+- [x] Comprehensive round-trip, invalid-payload and simulated-write-failure tests.
+- [ ] Verify CI on main.
+- [ ] Android/iOS share sheet, document selection, onboarding and large backup test.
+
+### Restore policy and limitations
+Restore **replaces** existing local data; it is not a merge operation. The user must first save the current journal if desired. Backup files are unencrypted, contain potentially sensitive personal health and fitness information, and must be stored privately. Export requires the user to complete a share/save action outside the app; automatic/cloud backup is not included. Backup import limit is 12 MB pending native performance verification.
+
 ## Versioning
 
 Keep the app prerelease until Group 15. Version `0.1.0` identifies the current development baseline; it is not a claim of production readiness. Publish v1.0.0 only after the complete fitness core and quality gates above are satisfied.

@@ -170,3 +170,13 @@ The **Overview** and **Progress** screens link to **Wellbeing & recovery**. Reco
 The recovery screen shows a 14-day sleep-duration chart, average sleep/energy/soreness based only on available observations, and a side-by-side summary of logged sleep and training. A workout is aligned to its **completion date in the device's local timezone**, and unfinished/future-dated sessions are excluded. The view is descriptive: **it does not calculate a readiness score, diagnose health, or imply that sleep caused any training outcome**.
 
 SQLite schema **v9** introduces `recovery_entries` with a unique date, optional validated ratings and sleep duration (stored as integer minutes), and notes. The migration leaves workouts, nutrition, hydration, routines and body records intact; recovery updates use confirmed exclusive transactions. Native device verification is still required.
+
+## First launch, settings and complete data backup (Group 13)
+
+First launch introduces workout logging, optional nutrition/recovery journals, and the importance of keeping a personal backup. It can be skipped; existing local records bypass the introduction. The completed introduction flag is stored locally and does not require an account or an internet connection.
+
+Settings allows you to select kilograms or pounds and system/light/dark appearance. **Export full JSON backup** generates a versioned local file and opens the system share sheet. Choose a destination outside the app (e.g. a private local folder or an account you control) and verify that the file was saved. Merely opening/closing the share sheet does not guarantee an external copy.
+
+**Restore backup** uses the system document picker. Files are checked for size (12 MB limit), JSON format, supported backup version, field validity, unique identifiers, numeric constraints and dates *before* the user can confirm replacement. The app presents a data summary and then requires a second destructive confirmation. An accepted restore **replaces the entire local journal** in one exclusive SQLite transaction. A validation failure, disk error or uniqueness violation rolls it back and preserves the previous journal. Restoration is not merge/sync.
+
+The backup includes preferences, workouts and sets, custom exercise definitions (including archives), routines, body metrics and fitness goals, foods, meal history, nutrition targets, water logs and recovery check-ins. It contains personal information and is **not encrypted**. Avoid sharing the file publicly. The one-time introduction flag is not user health data and is retained across restore. This group does not offer automatic scheduling or cloud backup. On-device share/picker behavior and large-file performance require Android/iOS verification in Group 14.

@@ -4,13 +4,18 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { openGymRepository } from '@/src/data/sqlite-native';
 import { findExercise, hasExerciseName, normalizeExerciseInput } from '@/src/data/exercises';
 import { emptyGymData, LEGACY_KEY } from '@/src/data/legacy';
+import { serializeBackup } from '@/src/data/backup';
 import type { GymRepository } from '@/src/data/gym-repository';
 import { createId, previousCompletedSets, defaultSetForTracking, copySetForNewSession } from '@/src/lib/workouts';
 import { buildStarterRoutine, createRoutineTemplate, duplicateRoutineTemplate, routineToWorkout, validateRoutine } from '@/src/data/routines';
-import type { Exercise, ExerciseInput, GymData, Preferences, TrainingSet, Workout, WorkoutMovement, RoutineTemplate, BodyMeasurement, FitnessGoal, FoodItem, MealEntry, NutritionTargets, WaterEntry, RecoveryEntry } from '@/src/types/gym';
+import type { Exercise, ExerciseInput, GymData, Preferences, TrainingSet, Workout, WorkoutMovement, RoutineTemplate, BodyMeasurement, FitnessGoal, FoodItem, MealEntry, NutritionTargets, WaterEntry, RecoveryEntry, GymBackup } from '@/src/types/gym';
 
 type GymContextValue = {
   ready: boolean;
+  welcomeDone: boolean;
+  completeWelcome: () => Promise<void>;
+  exportBackup: () => Promise<string>;
+  restoreBackup: (backup: GymBackup) => Promise<void>;
   error: string | null;
   saveStatus: 'saved' | 'saving' | 'error';
   retrySave: () => Promise<void>;
@@ -74,6 +79,7 @@ const SAVE_ERROR = 'Unable to save changes to SQLite. Your latest edits may exis
  */
 export function GymProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
+  const [welcomeDone, setWelcomeDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
   const [data, setData] = useState<GymData>(emptyGymData);
@@ -118,6 +124,10 @@ export function GymProvider({ children }: { children: ReactNode }) {
         const savedTargets = await repository.readNutritionTargets();
         const savedWater = await repository.readWaterEntries();
         const savedRecovery = await repository.readRecoveryEntries();
+        const welcomeValue = await AsyncStorage.getItem('gym-app:onboarding:v1');
+        const alreadyHasData = restored.workouts.length + savedExercises.length + savedRoutines.length +
+          savedMeasurements.length + savedGoals.length + savedFoods.length + savedMeals.length +
+          savedWater.length + savedRecovery.length > 0 || savedTargets !== null;
         if (!mountedRef.current) return;
         repositoryRef.current = repository;
         latestRef.current = restored;
@@ -139,6 +149,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
         setWaterEntries(savedWater);
         recoveryRef.current = savedRecovery;
         setRecoveryEntries(savedRecovery);
+        setWelcomeDone(welcomeValue === 'complete' || alreadyHasData);
         setReady(true);
       } catch (cause) {
         if (!mountedRef.current) return;
@@ -467,6 +478,43 @@ export function GymProvider({ children }: { children: ReactNode }) {
     setRecoveryEntries(next);
   }, [commitConfirmed]);
 
+  const completeWelcome = useCallback(async (): Promise<void> => {
+    await AsyncStorage.setItem('gym-app:onboarding:v1', 'complete');
+    if (mountedRef.current) setWelcomeDone(true);
+  }, []);
+
+  const exportBackup = useCallback(async (): Promise<string> => {
+    await flushChanges();
+    const repo = repositoryRef.current;
+    if (!repo) throw new Error('Database unavailable');
+    const backup = await repo.readFullBackup();
+    return serializeBackup(backup);
+  }, [flushChanges]);
+
+  const restoreBackup = useCallback(async (backup: GymBackup): Promise<void> => {
+    await commitConfirmed(repo => repo.restoreFullBackup(backup));
+    // Update all provider state only after the single SQLite transaction succeeded.
+    latestRef.current = backup.snapshot;
+    setData(backup.snapshot);
+    customRef.current = backup.customExercises;
+    setCustomExercises(backup.customExercises);
+    routinesRef.current = backup.routines;
+    setRoutines(backup.routines);
+    measurementsRef.current = backup.measurements;
+    setMeasurements(backup.measurements);
+    goalsRef.current = backup.goals;
+    setGoals(backup.goals);
+    foodsRef.current = backup.foods;
+    setFoods(backup.foods);
+    mealsRef.current = backup.meals;
+    setMeals(backup.meals);
+    setNutritionTargets(backup.nutritionTargets);
+    waterRef.current = backup.waterEntries;
+    setWaterEntries(backup.waterEntries);
+    recoveryRef.current = backup.recoveryEntries;
+    setRecoveryEntries(backup.recoveryEntries);
+  }, [commitConfirmed]);
+
   const applyWorkout = useCallback((
     id: string,
     operation: (workout: Workout) => Workout,
@@ -669,7 +717,8 @@ export function GymProvider({ children }: { children: ReactNode }) {
 
   return (
     <GymContext.Provider value={{
-      ready, error, saveStatus, retrySave, workouts: data.workouts, preferences: data.preferences,
+      ready, error, saveStatus, retrySave, welcomeDone, completeWelcome, exportBackup, restoreBackup,
+      workouts: data.workouts, preferences: data.preferences,
       customExercises, createCustomExercise, updateCustomExercise, archiveCustomExercise,
       routines, saveRoutine, createRoutine, importStarterRoutine, duplicateRoutine, deleteRoutine, startRoutineWorkout,
       measurements, goals, saveBodyMeasurement, deleteBodyMeasurement, saveFitnessGoal, deleteFitnessGoal,

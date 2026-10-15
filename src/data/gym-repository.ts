@@ -5,7 +5,8 @@ import { validateRoutine } from './routines.ts';
 import { assertMeasurement, assertGoal } from '../lib/body-metrics.ts';
 import { validateFood, validateMeal, validateNutritionTargets, validateWaterEntry } from '../lib/nutrition.ts';
 import { validateRecovery } from '../lib/recovery.ts';
-import type { GymData, Preferences, Workout, WorkoutMovement, TrainingSet, Exercise, RoutineTemplate, RoutineExercise, BodyMeasurement, FitnessGoal, FoodItem, MealEntry, NutritionTargets, WaterEntry, RecoveryEntry } from '../types/gym';
+import { validateBackup } from './backup.ts';
+import type { GymData, Preferences, Workout, WorkoutMovement, TrainingSet, Exercise, RoutineTemplate, RoutineExercise, BodyMeasurement, FitnessGoal, FoodItem, MealEntry, NutritionTargets, WaterEntry, RecoveryEntry, GymBackup } from '../types/gym';
 
 export type SqlParam = string | number | null;
 
@@ -530,6 +531,114 @@ export class GymRepository {
     if (!id.startsWith('recovery:')) throw new Error('Invalid recovery ID');
     await this.db.withExclusiveTransactionAsync(async tx => {
       await tx.runAsync('DELETE FROM recovery_entries WHERE id = ?', id);
+    });
+  }
+
+  async readFullBackup(): Promise<GymBackup> {
+    // Reads are ordered and the provider serializes writes before this call.
+    const [snapshot, customExercises, routines, measurements, goals, foods, meals,
+      nutritionTargets, waterEntries, recoveryEntries] = await Promise.all([
+      this.readSnapshot(), this.readCustomExercises(), this.readRoutines(),
+      this.readMeasurements(), this.readGoals(), this.readFoods(), this.readMeals(),
+      this.readNutritionTargets(), this.readWaterEntries(), this.readRecoveryEntries(),
+    ]);
+    return validateBackup({
+      format: 'react-native-gym-app-backup', version: 1,
+      createdAt: new Date().toISOString(),
+      snapshot, customExercises, routines, measurements, goals,
+      foods, meals, nutritionTargets, waterEntries, recoveryEntries,
+    });
+  }
+
+  /**
+   * Destructive full restore. Every table is rewritten in ONE SQLite transaction:
+   * any validation, uniqueness or I/O failure rolls back the entire restore.
+   * Legacy migration markers and onboarding metadata are intentionally retained.
+   */
+  async restoreFullBackup(input: GymBackup): Promise<void> {
+    const backup = validateBackup(input);
+    await this.db.withExclusiveTransactionAsync(async tx => {
+      await tx.runAsync('DELETE FROM workouts');
+      await tx.runAsync('DELETE FROM routine_templates');
+      await tx.runAsync('DELETE FROM custom_exercises');
+      await tx.runAsync('DELETE FROM body_measurements');
+      await tx.runAsync('DELETE FROM fitness_goals');
+      await tx.runAsync('DELETE FROM foods');
+      await tx.runAsync('DELETE FROM meal_entries');
+      await tx.runAsync('DELETE FROM nutrition_targets');
+      await tx.runAsync('DELETE FROM water_entries');
+      await tx.runAsync('DELETE FROM recovery_entries');
+      await writeSnapshot(tx, backup.snapshot);
+      for (const e of backup.customExercises) {
+        const normalized = normalizeExerciseInput(e);
+        await tx.runAsync(
+          'INSERT INTO custom_exercises (id,name,muscle,equipment,kind,tracking,archived) VALUES(?,?,?,?,?,?,?)',
+          e.id, normalized.name, normalized.muscle, normalized.equipment, normalized.kind,
+          normalized.tracking, e.archived ? 1 : 0,
+        );
+      }
+      for (const routine of backup.routines) {
+        await tx.runAsync(
+          'INSERT INTO routine_templates (id,name,description,created_at,updated_at) VALUES(?,?,?,?,?)',
+          routine.id, routine.name.trim(), routine.description.trim(),
+          routine.createdAt, routine.updatedAt,
+        );
+        for (const [index, movement] of routine.exercises.entries()) {
+          await tx.runAsync(
+            'INSERT INTO routine_exercises (id,routine_id,exercise_id,position,target_sets,target_reps,target_weight_kg,target_duration_seconds,target_distance_meters) VALUES(?,?,?,?,?,?,?,?,?)',
+            movement.id, routine.id, movement.exerciseId, index, movement.sets, movement.reps,
+            movement.weightKg, movement.durationSeconds ?? null, movement.distanceMeters ?? null,
+          );
+        }
+        for (const day of routine.days) {
+          await tx.runAsync('INSERT INTO routine_weekdays (routine_id,weekday) VALUES(?,?)',
+            routine.id, day);
+        }
+      }
+      for (const e of backup.measurements) {
+        await tx.runAsync(
+          'INSERT INTO body_measurements (id,kind,recorded_on,value,notes) VALUES(?,?,?,?,?)',
+          e.id, e.kind, e.recordedOn, e.value, e.notes ?? '',
+        );
+      }
+      for (const e of backup.goals) {
+        await tx.runAsync(
+          'INSERT INTO fitness_goals (id,kind,created_on,start_value,target_value) VALUES(?,?,?,?,?)',
+          e.id, e.kind, e.createdOn, e.startValue, e.targetValue,
+        );
+      }
+      for (const e of backup.foods) {
+        await tx.runAsync(
+          'INSERT INTO foods (id,name,brand,serving_grams,calories_per_serving,protein_per_serving,carbs_per_serving,fat_per_serving,archived) VALUES(?,?,?,?,?,?,?,?,?)',
+          e.id, e.name, e.brand, e.servingGrams, e.caloriesPerServing,
+          e.proteinPerServing, e.carbsPerServing, e.fatPerServing, e.archived ? 1 : 0,
+        );
+      }
+      for (const e of backup.meals) {
+        await tx.runAsync(
+          'INSERT INTO meal_entries (id,eaten_on,meal_type,quantity,food_id,food_name,food_brand,serving_grams,calories_per_serving,protein_per_serving,carbs_per_serving,fat_per_serving) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)',
+          e.id, e.eatenOn, e.mealType, e.quantity, e.foodId, e.foodName, e.foodBrand,
+          e.servingGrams, e.caloriesPerServing, e.proteinPerServing, e.carbsPerServing, e.fatPerServing,
+        );
+      }
+      if (backup.nutritionTargets) {
+        const t = backup.nutritionTargets;
+        await tx.runAsync(
+          'INSERT INTO nutrition_targets (id,calories,protein_grams,carbs_grams,fat_grams,water_ml) VALUES(1,?,?,?,?,?)',
+          t.calories, t.proteinGrams, t.carbsGrams, t.fatGrams, t.waterMl,
+        );
+      }
+      for (const e of backup.waterEntries) {
+        await tx.runAsync('INSERT INTO water_entries (id,recorded_on,amount_ml) VALUES(?,?,?)',
+          e.id, e.recordedOn, e.amountMl);
+      }
+      for (const e of backup.recoveryEntries) {
+        await tx.runAsync(
+          'INSERT INTO recovery_entries (id,recorded_on,sleep_minutes,sleep_quality,energy,mood,soreness,stress,notes) VALUES(?,?,?,?,?,?,?,?,?)',
+          e.id, e.recordedOn, e.sleepMinutes, e.sleepQuality, e.energy,
+          e.mood, e.soreness, e.stress, e.notes,
+        );
+      }
     });
   }
 

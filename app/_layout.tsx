@@ -4,9 +4,10 @@ import { Text, View } from 'react-native';
 import { GymProvider, useGym } from '@/src/state/GymContext';
 import { useAppTheme } from '@/src/theme/colors';
 import { LoadingScreen } from '@/src/components/ui';
+import { WelcomeScreen } from '@/src/components/Welcome';
 
 function Navigation() {
-  const { ready, error } = useGym();
+  const { ready, error, welcomeDone } = useGym();
   const { colors, dark } = useAppTheme();
 
   if (!ready && !error) return <LoadingScreen />;
@@ -18,6 +19,8 @@ function Navigation() {
       </View>
     );
   }
+
+  if (!welcomeDone) return <WelcomeScreen />;
 
   return (
     <>

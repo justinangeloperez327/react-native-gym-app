@@ -95,3 +95,11 @@ Daily nutrition calculations use the existing immutable `meal_entries` serving a
 Data reads and writes run through the same confirmed transactional repository used by body measurements and nutrition. Domain validation checks real calendar days (not future dates), input bounds, notes length and that a check-in is not completely empty. Migration v9 is additive and guarded by SQLite `PRAGMA user_version`; it is rolled back atomically if schema creation fails.
 
 Summary calculations use completed workout finish timestamps assigned to the local calendar date. Unlogged recovery fields are excluded from averages, and incomplete workouts are excluded from training counts. No physiological interpretation or readiness score is generated.
+
+## Portable full-data backup (Group 13)
+
+The app exports a JSON envelope with `format: "react-native-gym-app-backup"`, `version: 1` and `createdAt`, plus a complete SQLite-derived snapshot of workouts/preferences, custom exercises, routines/schedules, body measurements, fitness goals, foods, meal entries with their immutable nutrition snapshots, nutrition targets, water entries and recovery records. Portable format version **1** is independent of SQLite `PRAGMA user_version = 9`.
+
+Before accepting a restore, the app parses the file with strict bounds and validates identifiers, dates, supported types, numeric ranges, duplicate IDs and per-date uniqueness. Files above 12 MB are rejected. The user must preview the contents and explicitly confirm full replacement. Restoration is **one** `withExclusiveTransactionAsync` across all ten logical data groups; delete/insert operations and preferences updates roll back together on any SQL failure. It does not overwrite the legacy import marker or onboarding metadata. Once SQLite commits, the provider replaces all in-memory state simultaneously with the restored record groups.
+
+JSON backup files include personal and potentially sensitive wellness information and are not encrypted. Device share/picker APIs are delegated to Expo SDK 57; exporting does not imply that the user completed saving the file outside the app. Automatic cloud backup and incremental merges are out of scope.

@@ -989,3 +989,113 @@ test('v9 recovery table creation rolls back on index collisions', async () => {
     assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 9);
   } finally { db.close(); }
 });
+
+
+test('full JSON backup round trip restores every domain including archived records', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const { parseBackup, serializeBackup } = await import('../src/data/backup.ts');
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => null);
+    await repo.replaceSnapshot(sample());
+    await repo.saveCustomExercise({ id: 'custom:one', name: 'My carry', muscle: 'Full Body',
+      equipment: 'Kettlebell', kind: 'strength', tracking: 'reps', custom: true, archived: true });
+    await repo.saveRoutine({ id: 'routine:one', name: 'Test routine', description: 'Private',
+      createdAt: '2026-10-12T10:00:00.000Z', updatedAt: '2026-10-12T10:00:00.000Z', days: [1, 3],
+      exercises: [{ id: 'routine-set-1', exerciseId: 'custom:one', sets: 2, reps: 10, weightKg: 20 }] });
+    await repo.saveMeasurement({ id: 'body:one', kind: 'weight', recordedOn: '2026-10-12', value: 77 });
+    await repo.saveGoal({ id: 'goal:one', kind: 'body_weight', createdOn: '2026-10-12',
+      startValue: 77, targetValue: 75 });
+    await repo.saveFood({ id: 'food:one', name: 'Rice bowl', brand: '', servingGrams: 150,
+      caloriesPerServing: 225, proteinPerServing: 7, carbsPerServing: 40, fatPerServing: 3, archived: true });
+    await repo.saveMeal({ id: 'meal:one', eatenOn: '2026-10-12', mealType: 'lunch', quantity: 1.5,
+      foodId: 'food:one', foodName: 'Rice bowl', foodBrand: '', servingGrams: 150,
+      caloriesPerServing: 225, proteinPerServing: 7, carbsPerServing: 40, fatPerServing: 3 });
+    await repo.saveNutritionTargets({ calories: 2000, proteinGrams: 120, carbsGrams: null, fatGrams: null, waterMl: 2200 });
+    await repo.saveWaterEntry({ id: 'water:one', recordedOn: '2026-10-12', amountMl: 250 });
+    await repo.saveRecoveryEntry({ id: 'recovery:one', recordedOn: '2026-10-12',
+      sleepMinutes: 480, sleepQuality: 4, energy: 4, mood: 4, soreness: 1, stress: 2, notes: 'Great day' });
+    const before = await repo.readFullBackup();
+    const loaded = parseBackup(serializeBackup(before));
+    assert.deepEqual(loaded, before);
+    assert.equal(before.snapshot.workouts.length, 1);
+    assert.equal(before.routines.length, 1);
+    assert.equal(before.meals.length, 1);
+    assert.equal(before.recoveryEntries.length, 1);
+
+    // Replacing with an empty valid archive clears each tracked domain.
+    const empty = { ...before,
+      snapshot: { version: 1, workouts: [], preferences: { unit: 'kg', theme: 'system' } },
+      customExercises: [], routines: [], measurements: [], goals: [], foods: [],
+      meals: [], nutritionTargets: null, waterEntries: [], recoveryEntries: [] };
+    await repo.restoreFullBackup(empty);
+    const cleared = await repo.readFullBackup();
+    assert.equal(cleared.snapshot.workouts.length, 0);
+    assert.equal(cleared.recoveryEntries.length, 0);
+    assert.equal(cleared.foods.length, 0);
+    await repo.restoreFullBackup(loaded);
+    const after = await repo.readFullBackup();
+    const { createdAt: _oldTime, ...original } = loaded;
+    const { createdAt: _newTime, ...restored } = after;
+    assert.deepEqual(restored, original);
+  } finally { db.close(); }
+});
+
+test('restore rolls back all table changes after a late SQLite failure', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => null);
+    await repo.replaceSnapshot(sample());
+    await repo.saveFood({ id: 'food:existing', name: 'Existing food', brand: '',
+      servingGrams: 100, caloriesPerServing: 120, proteinPerServing: 1,
+      carbsPerServing: 20, fatPerServing: 1, archived: false });
+    const original = await repo.readFullBackup();
+    const newBackup = { ...original, snapshot: { ...original.snapshot, workouts: [] },
+      foods: [], recoveryEntries: [
+        { id: 'recovery:new', recordedOn: '2026-10-12', sleepMinutes: 450,
+          sleepQuality: 3, energy: null, mood: null, soreness: null, stress: null, notes: '' },
+      ] };
+    db.failOn = 'INSERT INTO recovery_entries';
+    await assert.rejects(repo.restoreFullBackup(newBackup), /Simulated/);
+    db.failOn = null;
+    const after = await repo.readFullBackup();
+    assert.deepEqual(after.snapshot, original.snapshot);
+    assert.deepEqual(after.foods, original.foods);
+    assert.deepEqual(after.recoveryEntries, original.recoveryEntries);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 9);
+  } finally { db.close(); }
+});
+
+test('invalid backup is rejected before any existing record is removed', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const { validateBackup } = await import('../src/data/backup.ts');
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => null);
+    await repo.replaceSnapshot(sample());
+    const backup = await repo.readFullBackup();
+    const changes = [
+      { version: 100 },
+      { format: 'untrusted-source' },
+      { snapshot: { ...backup.snapshot, preferences: { unit: 'stone', theme: 'dark' } } },
+      { meals: [{}] },
+      { waterEntries: [{ id: 'water:one', amountMl: -5, recordedOn: '2026-10-12' }] },
+      { recoveryEntries: [{ id: 'recovery:x', recordedOn: '2026-10-12', sleepMinutes: 9999,
+        sleepQuality: 2, energy: 4, mood: 1, soreness: 2, stress: 3, notes: '' }] },
+      { routines: [{ id: 'routine:bad', name: 'Hello', description: '',
+        createdAt: '2026-10-10T12:00:00Z', updatedAt: '2026-10-10T12:00:00Z',
+        days: [1, 1], exercises: [] }] },
+    ];
+    for (const patch of changes) {
+      await assert.rejects(repo.restoreFullBackup({ ...backup, ...patch }));
+    }
+    assert.throws(() => validateBackup({ ...backup, recoveryEntries: [
+      { id: 'recovery:one', recordedOn: '2026-10-12', sleepMinutes: 450,
+        sleepQuality: 4, energy: 3, mood: 3, soreness: 2, stress: 1, notes: '' },
+      { id: 'recovery:two', recordedOn: '2026-10-12', sleepMinutes: 430,
+        sleepQuality: 4, energy: 3, mood: 3, soreness: 2, stress: 1, notes: '' },
+    ] }), /duplicate recovery date/);
+    assert.deepEqual((await repo.readSnapshot()).workouts, sample().workouts);
+  } finally { db.close(); }
+});

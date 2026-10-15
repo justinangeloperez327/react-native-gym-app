@@ -120,3 +120,19 @@ export type RecoveryEntry = {
   stress: number | null;
   notes: string;
 };
+
+export type GymBackup = {
+  format: 'react-native-gym-app-backup';
+  version: 1;
+  createdAt: string;
+  snapshot: GymData;
+  customExercises: Exercise[];
+  routines: RoutineTemplate[];
+  measurements: BodyMeasurement[];
+  goals: FitnessGoal[];
+  foods: FoodItem[];
+  meals: MealEntry[];
+  nutritionTargets: NutritionTargets | null;
+  waterEntries: WaterEntry[];
+  recoveryEntries: RecoveryEntry[];
+};
