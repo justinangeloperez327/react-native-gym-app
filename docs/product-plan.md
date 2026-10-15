@@ -288,7 +288,7 @@ Daily calorie targets, macro goals/calculations, hydration logging and nutrition
 - [x] Edit/delete individual water logs with confirmed local SQLite writes.
 - [x] Last-seven-day calendar summary of recorded calories and water, including missing-day distinctions.
 - [x] Tests for macro calculations, optional targets, date validation, migration integrity and write rollback.
-- [ ] Verify CI on main.
+- [x] Verify CI on main.
 - [ ] Android/iOS nutrition-target forms, hydration logs and accessibility testing.
 
 ### Data boundaries
