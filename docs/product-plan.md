@@ -252,7 +252,7 @@ Only completed sets from finished workouts count. Warmups count for volume but d
 - [x] Direction-aware weight-goal progress and locally reset weekly workout counts.
 - [x] Progress-tab summary and dedicated Body & Goals screen.
 - [x] Validation and SQLite migration/integrity tests.
-- [ ] Verify final CI on main.
+- [x] Verify final CI on main.
 - [ ] Native Android/iOS keyboard, date entry, accessibility, and large-history smoke testing.
 
 ### Data boundaries
