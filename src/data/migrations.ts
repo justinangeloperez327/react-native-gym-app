@@ -42,7 +42,12 @@ export const MIGRATION_V5 = [
   "ALTER TABLE workout_sets ADD COLUMN set_type TEXT NOT NULL DEFAULT 'normal' CHECK(set_type IN ('normal','warmup','drop','failure'))",
   "ALTER TABLE workout_movements ADD COLUMN rest_seconds INTEGER NOT NULL DEFAULT 90 CHECK(rest_seconds BETWEEN 0 AND 600)",
   "ALTER TABLE workout_movements ADD COLUMN superset_group TEXT",
-  "ALTER TABLE routine_exercises ADD COLUMN target_duration_seconds INTEGER",
-  "ALTER TABLE routine_exercises ADD COLUMN target_distance_meters REAL",
+  // SQLite cannot DROP the old CHECK(target_reps BETWEEN 1 AND 1000).
+  // Rebuild this child table atomically to permit zero-rep timed/cardio entries.
+  "CREATE TABLE routine_exercises_v5 (id TEXT PRIMARY KEY NOT NULL, routine_id TEXT NOT NULL REFERENCES routine_templates(id) ON DELETE CASCADE, exercise_id TEXT NOT NULL, position INTEGER NOT NULL CHECK(position >= 0), target_sets INTEGER NOT NULL CHECK(target_sets BETWEEN 1 AND 20), target_reps INTEGER NOT NULL CHECK(target_reps BETWEEN 0 AND 1000), target_weight_kg REAL NOT NULL CHECK(target_weight_kg >= 0), target_duration_seconds INTEGER CHECK(target_duration_seconds IS NULL OR target_duration_seconds BETWEEN 0 AND 86400), target_distance_meters REAL CHECK(target_distance_meters IS NULL OR target_distance_meters BETWEEN 0 AND 1000000), UNIQUE(routine_id, position), UNIQUE(routine_id, exercise_id))",
+  "INSERT INTO routine_exercises_v5(id, routine_id, exercise_id, position, target_sets, target_reps, target_weight_kg) SELECT id, routine_id, exercise_id, position, target_sets, target_reps, target_weight_kg FROM routine_exercises",
+  "DROP TABLE routine_exercises",
+  "ALTER TABLE routine_exercises_v5 RENAME TO routine_exercises",
+  "CREATE INDEX idx_routine_exercises_owner ON routine_exercises(routine_id)",
   'PRAGMA user_version = 5',
 ].join(';\n') + ';';
