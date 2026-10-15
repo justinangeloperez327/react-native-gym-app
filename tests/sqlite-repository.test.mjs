@@ -341,6 +341,26 @@ test('live note updates do not rewrite or reorder sets', async () => {
 });
 
 
+
+async function insertV3Workout(db, workout) {
+  await db.runAsync(
+    'INSERT INTO workouts(id, started_at, finished_at, notes) VALUES (?, ?, ?, ?)',
+    workout.id, workout.startedAt, workout.finishedAt, workout.notes ?? '',
+  );
+  for (const [index, movement] of workout.movements.entries()) {
+    await db.runAsync(
+      'INSERT INTO workout_movements(id, workout_id, exercise_id, position, notes) VALUES (?, ?, ?, ?, ?)',
+      movement.id, workout.id, movement.exerciseId, index, movement.notes ?? '',
+    );
+    for (const [setIndex, set] of movement.sets.entries()) {
+      await db.runAsync(
+        'INSERT INTO workout_sets(id, movement_id, position, reps, weight_kg, completed) VALUES (?, ?, ?, ?, ?, ?)',
+        set.id, movement.id, setIndex, set.reps, set.weightKg, set.completed ? 1 : 0,
+      );
+    }
+  }
+}
+
 test('v3 to v4 schema migration preserves existing workout data and preferences', async () => {
   const db = new NativeTestDatabase();
   try {
@@ -350,7 +370,7 @@ test('v3 to v4 schema migration preserves existing workout data and preferences'
     await db.execAsync(MIGRATION_V2);
     await db.execAsync(MIGRATION_V3);
     const repo = new GymRepository(db);
-    await repo.upsertWorkout(sample().workouts[0]);
+    await insertV3Workout(db, sample().workouts[0]);
     await repo.updatePreferences(sample().preferences);
     await repo.initialize(async () => null);
     assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 5);
@@ -457,7 +477,7 @@ test('v4 to v5 migration retains workouts and routine targets', async () => {
     await db.execAsync('PRAGMA foreign_keys = ON;');
     for (const script of [MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4]) await db.execAsync(script);
     const repo = new GymRepository(db);
-    await repo.upsertWorkout(sample().workouts[0]);
+    await insertV3Workout(db, sample().workouts[0]);
     const original = {
       id: 'routine:prior', name: 'Existing plan', description: '',
       createdAt: '2026-10-12T10:00:00.000Z', updatedAt: '2026-10-12T10:00:00.000Z',
