@@ -40,7 +40,7 @@ export function validateReleaseConfig(app, eas) {
 export function validateEasLink(app) {
   const id = app?.expo?.extra?.eas?.projectId;
   return typeof id === 'string' &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
     ? [] : ['EAS project is not linked: run eas init and commit its real projectId'];
 }
 
