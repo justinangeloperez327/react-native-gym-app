@@ -657,7 +657,7 @@ test('v6 measurement and goal failures roll back atomically', async () => {
     // Occupy a would-be v6 index name to force a transactional failure after CREATE TABLE.
     await db.execAsync('CREATE TABLE idx_body_measurements_kind_date (id INTEGER);');
     const repo = new GymRepository(db);
-    await assert.rejects(repo.initialize(async () => null), /already exists|index/i);
+    await assert.rejects(repo.initialize(async () => null), /already a table|already exists|index/i);
     assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 5);
     assert.equal(await db.getFirstAsync(
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'body_measurements'"), null);
