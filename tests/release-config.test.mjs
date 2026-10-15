@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_QA_IDS, qaMatrixIds, validateReleaseConfig, validateReleaseEvidence } from '../scripts/check-release.mjs';
+import { DEFAULT_QA_IDS, qaMatrixIds, validateReleaseConfig, validateReleaseEvidence, validateEasLink } from '../scripts/check-release.mjs';
 
 function appConfig() {
   return { expo: {
@@ -69,4 +69,13 @@ test('release evidence requires both platforms, complete QA checks and human app
 test('QA ID parser reads canonical table rows and ignores headers', () => {
   const md = '| ID | Thing |\n|---|---|\n| 01 | One |\n| 02 | Two |\n| Notes | Ignore |';
   assert.deepEqual(qaMatrixIds(md), ['01','02']);
+});
+
+test('manual native build requires a linked EAS project', () => {
+  const app = appConfig();
+  assert.match(validateEasLink(app).join(';'), /not linked/);
+  app.expo.extra = { eas: { projectId: 'not-a-uuid' } };
+  assert.match(validateEasLink(app).join(';'), /not linked/);
+  app.expo.extra.eas.projectId = 'bedf148e-5c9a-4d83-8ad8-d8d08076a1b6';
+  assert.deepEqual(validateEasLink(app), []);
 });

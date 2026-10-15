@@ -2,6 +2,19 @@
 
 **Status: release blocked, build configuration prepared.** The app remains at 0.1.0 until a release candidate has been built and signed, manually installed, audited and approved. No automated store submission, OTA publish, tag or deployment occurs on a normal push.
 
+## Native configuration introspection and EAS linkage
+
+CI evaluates Expo's AndroidManifest.xml and iOS Info.plist configuration in memory using
+`expo config --type introspect`. It verifies that the evaluated Android backup
+flag is off and forms resize with the soft keyboard. This is an additional static
+native-config check, **not** evidence of a compiled or installed native binary.
+
+The manual EAS workflow now runs `npm run check:eas-linked` to confirm
+`expo.extra.eas.projectId` is a valid linked UUID before attempting authentication.
+This fails until the real account owner completes `eas init` and commits
+the generated identifier. Do not insert a made-up project ID. The real
+signing credentials and `EXPO_TOKEN` are also needed for EAS preview builds.
+
 ## Current configuration
 
 - `eas.json` has `preview` (internal Android APK / iOS test build), `simulator` (iOS Simulator only) and `production` (Android AAB / iOS IPA) profiles.

@@ -37,13 +37,17 @@ export function validateReleaseConfig(app, eas) {
   return issues;
 }
 
+export function validateEasLink(app) {
+  const id = app?.expo?.extra?.eas?.projectId;
+  return typeof id === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
+    ? [] : ['EAS project is not linked: run eas init and commit its real projectId'];
+}
+
 export function validateReleaseEvidence(app, evidence, qaIds = DEFAULT_QA_IDS, iconExists = false) {
   const errors = [];
   const expo = app?.expo ?? {};
-  const projectId = expo.extra?.eas?.projectId;
-  if (typeof projectId !== 'string' ||
-      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(projectId))
-    errors.push('EAS project is not linked: run eas init and commit its real projectId');
+  errors.push(...validateEasLink(app));
   if (!iconExists || typeof expo.icon !== 'string' || !expo.icon.endsWith('.png'))
     errors.push('Approved 1024px PNG launcher icon is missing in Expo app config');
   if (!evidence || typeof evidence !== 'object') {
@@ -95,6 +99,7 @@ function execute() {
   const eas = JSON.parse(fs.readFileSync(path.join(root, 'eas.json'), 'utf8'));
   const configIssues = validateReleaseConfig(app, eas);
   const strict = process.argv.includes('--ready');
+  if (process.argv.includes('--linked')) configIssues.push(...validateEasLink(app));
   if (strict) {
     const approvals = path.join(root, 'release', 'release-evidence.json');
     const evidence = fs.existsSync(approvals) ? JSON.parse(fs.readFileSync(approvals, 'utf8')) : null;

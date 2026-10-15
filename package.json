@@ -13,7 +13,8 @@
     "validate": "npm run typecheck && npm run test && npm run check:expo",
     "check:release-config": "node scripts/check-release.mjs --config",
     "check:release-ready": "node scripts/check-release.mjs --ready",
-    "check:native-config": "node scripts/check-native-config.mjs"
+    "check:native-config": "node scripts/check-native-config.mjs",
+    "check:eas-linked": "node scripts/check-release.mjs --linked"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

@@ -44,6 +44,8 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Validate project and build configuration
         run: npm run check:release-config
+      - name: Require linked EAS project before contacting Expo
+        run: npm run check:eas-linked
       - name: Validate requested build platform/profile
         shell: bash
         env:
