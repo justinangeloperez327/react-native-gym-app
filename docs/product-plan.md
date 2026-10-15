@@ -304,7 +304,7 @@ No preset calorie, macro or water intake targets are assigned. Food nutrition is
 - [x] Align completed workouts with recovery observations by local workout completion date.
 - [x] Overview and Progress navigation to a dedicated recovery journal.
 - [x] Unit and SQLite tests for validation, persistence, date aggregation and migration rollback.
-- [ ] Verify final GitHub Actions CI on main.
+- [x] Verify final GitHub Actions CI on main.
 - [ ] Test Android/iOS date entry, keyboard behavior, accessibility and long-history performance.
 
 ### Data and interpretation boundaries
