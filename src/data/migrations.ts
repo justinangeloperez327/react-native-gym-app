@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 /** PRAGMA user_version advances atomically with the DDL transaction. */
 export const MIGRATION_V1 = [
@@ -50,4 +50,11 @@ export const MIGRATION_V5 = [
   "ALTER TABLE routine_exercises_v5 RENAME TO routine_exercises",
   "CREATE INDEX idx_routine_exercises_owner ON routine_exercises(routine_id)",
   'PRAGMA user_version = 5',
+].join(';\n') + ';';
+
+export const MIGRATION_V6 = [
+  "CREATE TABLE body_measurements (id TEXT PRIMARY KEY NOT NULL, kind TEXT NOT NULL CHECK(kind IN ('weight','waist','chest','hips','upper_arm','thigh')), recorded_on TEXT NOT NULL, value REAL NOT NULL CHECK(value > 0), notes TEXT NOT NULL DEFAULT '', UNIQUE(kind, recorded_on))",
+  "CREATE INDEX idx_body_measurements_kind_date ON body_measurements(kind, recorded_on DESC)",
+  "CREATE TABLE fitness_goals (id TEXT PRIMARY KEY NOT NULL, kind TEXT NOT NULL UNIQUE CHECK(kind IN ('body_weight','weekly_workouts')), created_on TEXT NOT NULL, start_value REAL NOT NULL, target_value REAL NOT NULL)",
+  'PRAGMA user_version = 6',
 ].join(';\n') + ';';

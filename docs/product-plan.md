@@ -240,6 +240,24 @@ The Group 4 catalog initially contained cardio as library-only. Group 7 subseque
 ### Metric definitions
 Only completed sets from finished workouts count. Warmups count for volume but do not qualify for strength PRs. Estimated 1RM uses Epley's formula for 1–10 reps with positive external load. Cardio duration and distance are separate from lifting volume. Body metrics and goals are planned for Group 9.
 
+## Group 9: Body Metrics and Goals
+
+### Implemented
+- [x] SQLite schema migration v6 for isolated body measurements and goal targets.
+- [x] Body weight, waist, chest, hips, upper-arm and thigh tracking, with valid calendar dates and optional notes.
+- [x] Create/update/delete readings and retain one unique record per metric per day.
+- [x] Canonical kg/cm storage, conversions for kg/lb and cm/in display.
+- [x] Measurement history and native bar-chart visualizations.
+- [x] Goal creation, target editing and deletion for body weight and weekly workout frequency.
+- [x] Direction-aware weight-goal progress and locally reset weekly workout counts.
+- [x] Progress-tab summary and dedicated Body & Goals screen.
+- [x] Validation and SQLite migration/integrity tests.
+- [ ] Verify final CI on main.
+- [ ] Native Android/iOS keyboard, date entry, accessibility, and large-history smoke testing.
+
+### Data boundaries
+Body readings are self-reported, stored locally, and not interpreted as medical assessments. No BMI or normative ideal-body-weight calculations are made. Weekly targets use completed workouts in the current local Monday–Sunday period. Removing a goal never removes training or measurement records.
+
 ## Versioning
 
 Keep the app prerelease until Group 15. Version `0.1.0` identifies the current development baseline; it is not a claim of production readiness. Publish v1.0.0 only after the complete fitness core and quality gates above are satisfied.

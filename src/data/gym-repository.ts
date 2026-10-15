@@ -1,8 +1,9 @@
 import { emptyGymData, isGymData, parseLegacy } from './legacy.ts';
-import { MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5, SCHEMA_VERSION } from './migrations.ts';
+import { MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5, MIGRATION_V6, SCHEMA_VERSION } from './migrations.ts';
 import { normalizeExerciseInput } from './exercises.ts';
 import { validateRoutine } from './routines.ts';
-import type { GymData, Preferences, Workout, WorkoutMovement, TrainingSet, Exercise, RoutineTemplate, RoutineExercise } from '../types/gym';
+import { assertMeasurement, assertGoal } from '../lib/body-metrics.ts';
+import type { GymData, Preferences, Workout, WorkoutMovement, TrainingSet, Exercise, RoutineTemplate, RoutineExercise, BodyMeasurement, FitnessGoal } from '../types/gym';
 
 export type SqlParam = string | number | null;
 
@@ -31,6 +32,8 @@ type ExerciseRow = { id: string; name: string; muscle: Exercise['muscle']; equip
 type RoutineRow = { id: string; name: string; description: string; created_at: string; updated_at: string };
 type RoutineExerciseRow = { id: string; routine_id: string; exercise_id: string; position: number; target_sets: number; target_reps: number; target_weight_kg: number; target_duration_seconds: number | null; target_distance_meters: number | null };
 type RoutineDayRow = { routine_id: string; weekday: number };
+type BodyRow = { id: string; kind: BodyMeasurement['kind']; recorded_on: string; value: number; notes: string };
+type GoalRow = { id: string; kind: FitnessGoal['kind']; created_on: string; start_value: number; target_value: number };
 type SetRow = { id: string; movement_id: string; position: number; reps: number; weight_kg: number; completed: number; duration_seconds: number | null; distance_meters: number | null; set_type: string };
 
 const LEGACY_STATUS = 'legacy_async_storage_v1';
@@ -81,6 +84,12 @@ export class GymRepository {
     if (currentVersion < 5) {
       await this.db.withExclusiveTransactionAsync(async (tx) => {
         await tx.execAsync(MIGRATION_V5);
+      });
+    }
+
+    if (currentVersion < 6) {
+      await this.db.withExclusiveTransactionAsync(async (tx) => {
+        await tx.execAsync(MIGRATION_V6);
       });
     }
 
@@ -262,6 +271,66 @@ export class GymRepository {
   async deleteRoutine(id: string): Promise<void> {
     await this.db.withExclusiveTransactionAsync(async (tx) => {
       await tx.runAsync('DELETE FROM routine_templates WHERE id = ?', id);
+    });
+  }
+
+  async readMeasurements(): Promise<BodyMeasurement[]> {
+    const rows = await this.db.getAllAsync(
+      'SELECT id, kind, recorded_on, value, notes FROM body_measurements ORDER BY recorded_on DESC, id DESC',
+    ) as BodyRow[];
+    return rows.map(row => {
+      const entry: BodyMeasurement = {
+        id: row.id, kind: row.kind, recordedOn: row.recorded_on, value: row.value,
+        ...(row.notes ? { notes: row.notes } : {}),
+      };
+      assertMeasurement(entry);
+      return entry;
+    });
+  }
+
+  async saveMeasurement(entry: BodyMeasurement): Promise<void> {
+    assertMeasurement(entry);
+    await this.db.withExclusiveTransactionAsync(async tx => {
+      await tx.runAsync(
+        'INSERT INTO body_measurements(id,kind,recorded_on,value,notes) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET kind=excluded.kind, recorded_on=excluded.recorded_on, value=excluded.value, notes=excluded.notes',
+        entry.id, entry.kind, entry.recordedOn, entry.value, entry.notes ?? '',
+      );
+    });
+  }
+
+  async deleteMeasurement(id: string): Promise<void> {
+    await this.db.withExclusiveTransactionAsync(async tx => {
+      await tx.runAsync('DELETE FROM body_measurements WHERE id = ?', id);
+    });
+  }
+
+  async readGoals(): Promise<FitnessGoal[]> {
+    const rows = await this.db.getAllAsync(
+      'SELECT id, kind, created_on, start_value, target_value FROM fitness_goals ORDER BY kind',
+    ) as GoalRow[];
+    return rows.map(row => {
+      const goal: FitnessGoal = {
+        id: row.id, kind: row.kind, createdOn: row.created_on,
+        startValue: row.start_value, targetValue: row.target_value,
+      };
+      assertGoal(goal);
+      return goal;
+    });
+  }
+
+  async saveGoal(goal: FitnessGoal): Promise<void> {
+    assertGoal(goal);
+    await this.db.withExclusiveTransactionAsync(async tx => {
+      await tx.runAsync(
+        'INSERT INTO fitness_goals(id,kind,created_on,start_value,target_value) VALUES(?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET kind=excluded.kind, created_on=excluded.created_on, start_value=excluded.start_value, target_value=excluded.target_value',
+        goal.id, goal.kind, goal.createdOn, goal.startValue, goal.targetValue,
+      );
+    });
+  }
+
+  async deleteGoal(id: string): Promise<void> {
+    await this.db.withExclusiveTransactionAsync(async tx => {
+      await tx.runAsync('DELETE FROM fitness_goals WHERE id = ?', id);
     });
   }
 

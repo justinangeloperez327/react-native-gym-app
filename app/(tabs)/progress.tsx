@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { EmptyState, Metric, Page, Panel, ScreenHeader, SectionTitle } from '@/src/components/ui';
 import { WorkoutPreview } from '@/src/components/WorkoutPreview';
+import { goalProgress, formatMeasurement, latestReading } from '@/src/lib/body-metrics';
 import { findExercise } from '@/src/data/exercises';
 import { exercisesInHistory, filterHistory, trainingSummary, weeklyTrends, type WeeklyTrend } from '@/src/lib/analytics';
 import { formatActivityTime, formatWeight } from '@/src/lib/workouts';
@@ -17,7 +18,7 @@ const metrics: { key: Measure; title: string }[] = [
 ];
 
 export default function ProgressScreen() {
-  const { workouts, preferences, customExercises } = useGym();
+  const { workouts, preferences, customExercises, measurements, goals } = useGym();
   const { colors } = useAppTheme();
   const [window, setWindow] = useState<Window>(30);
   const [measure, setMeasure] = useState<Measure>('sessions');
@@ -53,6 +54,32 @@ export default function ProgressScreen() {
               Logged activity time: {formatActivityTime(summary.activitySeconds)}
             </Text>
           ) : null}
+        </Panel>
+      </View>
+      <View style={{ gap: 10 }}>
+        <SectionTitle>Body & personal goals</SectionTitle>
+        <Panel>
+          <Text style={{ color: colors.muted, fontSize: 13 }}>Latest body weight</Text>
+          <Text style={{ color: colors.text, fontSize: 21, fontWeight: '700' }}>
+            {latestReading(measurements, 'weight')
+              ? formatMeasurement(latestReading(measurements, 'weight')!.value, 'weight', preferences.unit)
+              : 'No reading yet'}
+          </Text>
+          {goals.map(goal => {
+            const progress = goalProgress(goal, measurements, workouts);
+            return <View key={goal.id} style={{ gap: 3, paddingTop: 6 }}>
+              <Text style={{ color: colors.muted, fontSize: 13 }}>
+                {goal.kind === 'body_weight' ? 'Weight goal' : 'Weekly training goal'} · {progress.percent.toFixed(0)}%
+              </Text>
+              <View style={{ height: 6, borderRadius: 3, backgroundColor: colors.border, overflow: 'hidden' }}>
+                <View style={{ width: String(progress.percent) + '%', height: 6, backgroundColor: colors.primary }} />
+              </View>
+            </View>;
+          })}
+          <Pressable accessibilityRole="button" accessibilityLabel="Open body measurements and goals"
+            onPress={() => router.push('/body')} style={{ minHeight: 44, justifyContent: 'center' }}>
+            <Text style={{ color: colors.primary, fontWeight: '600' }}>View measurements & goals →</Text>
+          </Pressable>
         </Panel>
       </View>
       <View style={{ gap: 10 }}>
@@ -140,7 +167,7 @@ export default function ProgressScreen() {
       </View>
       <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18 }}>
         Strength records use completed non-warmup sets. Estimated 1RM is a calculated
-        approximation, not a measured maximum. Body metrics and goals are planned for Group 9.
+        approximation, not a measured maximum. Body measurements and goal targets are available in Body & personal goals.
       </Text>
     </Page>
   );

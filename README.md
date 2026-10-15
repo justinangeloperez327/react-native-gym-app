@@ -18,7 +18,8 @@ See the [approved product roadmap](docs/product-plan.md) for the scope and 15 im
 - Resume unfinished sessions, write workout/exercise notes, review and copy previous sets, and remove individual sets.
 - Build reusable workout routines with ordered exercises, target sets/reps/weight and recurring weekly schedules.
 - See local save status and retry failed writes; workout start/finish waits for SQLite confirmation.
-- View workout history with date filters, eight-week frequency/volume/distance charts, exercise progression and personal records.
+- View workout history with date filters, eight-week training charts, exercise progression and personal records.
+- Log body weight and circumference measurements, review historical trends and manage fitness targets.
 - Choose kg/lb and light/dark/system appearance.
 - Store workout data locally in Expo SQLite with transactional writes and schema migrations.
 - Import valid legacy AsyncStorage workouts without deleting the original source.
@@ -131,3 +132,13 @@ Exercise progression shows personal records and recent session charts, with a hi
 Strength records exclude warmup and incomplete sets. The estimated one-rep max uses Epley's formula only for positive external load and 1–10 reps; this is a calculation, not a measured maximum. Strength volume includes all completed sets (including warmups), while distance and duration are tracked separately. Cardio records reflect the longest individual completed distance/duration set.
 
 Analytics run locally from saved workout history, without adding a backend or a new database migration. Large-history scalability, chart usability and accessibility still need native device testing.
+
+## Body metrics and goals (Group 9)
+
+From **Progress → Body & personal goals**, record body weight, waist, chest, hips, upper-arm and thigh circumference, with local calendar dates and optional notes. One reading per metric per date is retained; entering a value for the same metric/date updates the existing record. Each entry can be edited or deleted, and recent readings appear in a native bar chart with the full dated history below.
+
+Storage is canonical: **kilograms for body weight and centimetres for circumference**. With the app preference set to pounds, body weight displays in pounds and circumference in inches. Changing the app's unit setting does not rewrite stored measurements. SQLite schema version 6 adds isolated `body_measurements` and `fitness_goals` tables without changing workouts.
+
+Set one target each for **body weight** and **completed workouts per week**. Weight-goal progress is calculated from the body weight recorded when the goal is first created, with direction-aware progress for weight gain or loss. Weekly frequency counts completed sessions from the current device-local Monday to Sunday and resets with each new week. Targets can be edited or removed independently of the measurements or workout history.
+
+These are user-entered fitness targets only, not medical recommendations. The app does not calculate BMI, prescribe an ideal weight, create diet advice or upload body measurements to a server. Native device and large-history verification remain required.

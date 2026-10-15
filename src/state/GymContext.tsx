@@ -7,7 +7,7 @@ import { emptyGymData, LEGACY_KEY } from '@/src/data/legacy';
 import type { GymRepository } from '@/src/data/gym-repository';
 import { createId, previousCompletedSets, defaultSetForTracking, copySetForNewSession } from '@/src/lib/workouts';
 import { buildStarterRoutine, createRoutineTemplate, duplicateRoutineTemplate, routineToWorkout, validateRoutine } from '@/src/data/routines';
-import type { Exercise, ExerciseInput, GymData, Preferences, TrainingSet, Workout, WorkoutMovement, RoutineTemplate } from '@/src/types/gym';
+import type { Exercise, ExerciseInput, GymData, Preferences, TrainingSet, Workout, WorkoutMovement, RoutineTemplate, BodyMeasurement, FitnessGoal } from '@/src/types/gym';
 
 type GymContextValue = {
   ready: boolean;
@@ -18,6 +18,12 @@ type GymContextValue = {
   preferences: Preferences;
   customExercises: Exercise[];
   routines: RoutineTemplate[];
+  measurements: BodyMeasurement[];
+  goals: FitnessGoal[];
+  saveBodyMeasurement: (entry: BodyMeasurement) => Promise<void>;
+  deleteBodyMeasurement: (id: string) => Promise<void>;
+  saveFitnessGoal: (goal: FitnessGoal) => Promise<void>;
+  deleteFitnessGoal: (id: string) => Promise<void>;
   saveRoutine: (routine: RoutineTemplate) => Promise<void>;
   createRoutine: (name?: string) => Promise<RoutineTemplate>;
   importStarterRoutine: (key: string) => Promise<RoutineTemplate>;
@@ -58,6 +64,10 @@ export function GymProvider({ children }: { children: ReactNode }) {
   const [data, setData] = useState<GymData>(emptyGymData);
   const [customExercises, setCustomExercises] = useState<Exercise[]>([]);
   const [routines, setRoutines] = useState<RoutineTemplate[]>([]);
+  const [measurements, setMeasurements] = useState<BodyMeasurement[]>([]);
+  const [goals, setGoals] = useState<FitnessGoal[]>([]);
+  const measurementsRef = useRef<BodyMeasurement[]>([]);
+  const goalsRef = useRef<FitnessGoal[]>([]);
   const routinesRef = useRef<RoutineTemplate[]>([]);
   const customRef = useRef<Exercise[]>([]);
   const latestRef = useRef<GymData>(data);
@@ -77,6 +87,8 @@ export function GymProvider({ children }: { children: ReactNode }) {
         const restored = await repository.readSnapshot();
         const savedExercises = await repository.readCustomExercises();
         const savedRoutines = await repository.readRoutines();
+        const savedMeasurements = await repository.readMeasurements();
+        const savedGoals = await repository.readGoals();
         if (!mountedRef.current) return;
         repositoryRef.current = repository;
         latestRef.current = restored;
@@ -85,6 +97,10 @@ export function GymProvider({ children }: { children: ReactNode }) {
         setCustomExercises(savedExercises);
         routinesRef.current = savedRoutines;
         setRoutines(savedRoutines);
+        measurementsRef.current = savedMeasurements;
+        setMeasurements(savedMeasurements);
+        goalsRef.current = savedGoals;
+        setGoals(savedGoals);
         setReady(true);
       } catch (cause) {
         if (!mountedRef.current) return;
@@ -301,6 +317,39 @@ export function GymProvider({ children }: { children: ReactNode }) {
     return workout.id;
   }, [commitConfirmed]);
 
+  const saveBodyMeasurement = useCallback(async (entry: BodyMeasurement): Promise<void> => {
+    await commitConfirmed(repo => repo.saveMeasurement(entry));
+    const next = [entry, ...measurementsRef.current.filter(item => item.id !== entry.id)]
+      .sort((a, b) => b.recordedOn.localeCompare(a.recordedOn) || b.id.localeCompare(a.id));
+    measurementsRef.current = next;
+    setMeasurements(next);
+  }, [commitConfirmed]);
+
+  const deleteBodyMeasurement = useCallback(async (id: string): Promise<void> => {
+    if (!measurementsRef.current.some(item => item.id === id)) throw new Error('Measurement unavailable');
+    await commitConfirmed(repo => repo.deleteMeasurement(id));
+    const next = measurementsRef.current.filter(item => item.id !== id);
+    measurementsRef.current = next;
+    setMeasurements(next);
+  }, [commitConfirmed]);
+
+  const saveFitnessGoal = useCallback(async (goal: FitnessGoal): Promise<void> => {
+    const conflicting = goalsRef.current.find(item => item.kind === goal.kind && item.id !== goal.id);
+    if (conflicting) throw new Error('Update your existing goal for this category');
+    await commitConfirmed(repo => repo.saveGoal(goal));
+    const next = [goal, ...goalsRef.current.filter(item => item.id !== goal.id)];
+    goalsRef.current = next;
+    setGoals(next);
+  }, [commitConfirmed]);
+
+  const deleteFitnessGoal = useCallback(async (id: string): Promise<void> => {
+    if (!goalsRef.current.some(item => item.id === id)) throw new Error('Goal unavailable');
+    await commitConfirmed(repo => repo.deleteGoal(id));
+    const next = goalsRef.current.filter(item => item.id !== id);
+    goalsRef.current = next;
+    setGoals(next);
+  }, [commitConfirmed]);
+
   const applyWorkout = useCallback((
     id: string,
     operation: (workout: Workout) => Workout,
@@ -506,6 +555,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
       ready, error, saveStatus, retrySave, workouts: data.workouts, preferences: data.preferences,
       customExercises, createCustomExercise, updateCustomExercise, archiveCustomExercise,
       routines, saveRoutine, createRoutine, importStarterRoutine, duplicateRoutine, deleteRoutine, startRoutineWorkout,
+      measurements, goals, saveBodyMeasurement, deleteBodyMeasurement, saveFitnessGoal, deleteFitnessGoal,
       startWorkout, addMovement, setRestSeconds, toggleSupersetWithPrevious, addSet, removeSet, copyPreviousSets,
       setWorkoutNotes, setMovementNotes, updateSet, removeMovement,
       finishWorkout, deleteWorkout, updatePreferences,

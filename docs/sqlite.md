@@ -63,3 +63,11 @@ The fifth migration adds nullable duration in seconds, distance in metres, and a
 All new fields use the existing transactional workout and routine repositories. Legacy JSON imports remain valid; optional new fields are validated when present. Completed distance and activity-duration metrics are calculated only from completed sets and do not contribute to strength volume.
 
 Rest countdown state is UI-local and uses a wall-clock deadline; it is not a persisted background alarm or a notification.
+
+## Schema version 6 — measurements and fitness goals
+
+The v6 transaction introduces `body_measurements` with a unique (kind, recorded_on) pair and a reverse-dated index. Supported kinds: weight, waist, chest, hips, upper_arm, thigh. The app writes all body weights in kg and circumferences in cm. Entry dates use local YYYY-MM-DD calendars, with date/value validation before every transaction. Original workout tables remain untouched.
+
+`fitness_goals` stores one goal per kind: body_weight (starting and target weights in kg) or weekly_workouts (integer sessions/week, starting at zero). Goals use a stable ID across target edits. Goal progression is computed dynamically from existing body measurements and completed workouts, not persisted as a counter.
+
+Readings, goals and deletions use confirmed, exclusive SQLite transactions. An unsuccessful save leaves in-memory lists unchanged. Neither deleting a measurement nor removing a goal changes any workout history.

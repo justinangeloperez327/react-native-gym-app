@@ -49,3 +49,20 @@ export type RoutineTemplate = {
   days: number[]; // 0=Sunday through 6=Saturday, local device calendar
   exercises: RoutineExercise[];
 };
+
+export type BodyMetricKind = 'weight' | 'waist' | 'chest' | 'hips' | 'upper_arm' | 'thigh';
+export type BodyMeasurement = {
+  id: string;
+  kind: BodyMetricKind;
+  recordedOn: string; // Device-local YYYY-MM-DD
+  value: number; // Canonical kg for weight, cm for circumferences
+  notes?: string;
+};
+export type FitnessGoalKind = 'body_weight' | 'weekly_workouts';
+export type FitnessGoal = {
+  id: string;
+  kind: FitnessGoalKind;
+  createdOn: string;
+  startValue: number; // kg baseline for body_weight, 0 for weekly_workouts
+  targetValue: number; // kg for body_weight, sessions/week for weekly_workouts
+};
