@@ -1,5 +1,5 @@
 import { emptyGymData, isGymData, parseLegacy } from './legacy.ts';
-import { MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, SCHEMA_VERSION } from './migrations.ts';
+import { MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4, MIGRATION_V5, SCHEMA_VERSION } from './migrations.ts';
 import { normalizeExerciseInput } from './exercises.ts';
 import { validateRoutine } from './routines.ts';
 import type { GymData, Preferences, Workout, WorkoutMovement, TrainingSet, Exercise, RoutineTemplate, RoutineExercise } from '../types/gym';
@@ -26,12 +26,12 @@ type SchemaRow = { user_version: number };
 type KeyRow = { value: string };
 type PrefRow = { weight_unit: string; theme: string };
 type WorkoutRow = { id: string; started_at: string; finished_at: string | null; notes: string };
-type MovementRow = { id: string; workout_id: string; exercise_id: string; position: number; notes: string };
+type MovementRow = { id: string; workout_id: string; exercise_id: string; position: number; notes: string; rest_seconds: number; superset_group: string | null };
 type ExerciseRow = { id: string; name: string; muscle: Exercise['muscle']; equipment: string; kind: Exercise['kind']; tracking: Exercise['tracking']; archived: number };
 type RoutineRow = { id: string; name: string; description: string; created_at: string; updated_at: string };
-type RoutineExerciseRow = { id: string; routine_id: string; exercise_id: string; position: number; target_sets: number; target_reps: number; target_weight_kg: number };
+type RoutineExerciseRow = { id: string; routine_id: string; exercise_id: string; position: number; target_sets: number; target_reps: number; target_weight_kg: number; target_duration_seconds: number | null; target_distance_meters: number | null };
 type RoutineDayRow = { routine_id: string; weekday: number };
-type SetRow = { id: string; movement_id: string; position: number; reps: number; weight_kg: number; completed: number };
+type SetRow = { id: string; movement_id: string; position: number; reps: number; weight_kg: number; completed: number; duration_seconds: number | null; distance_meters: number | null; set_type: string };
 
 const LEGACY_STATUS = 'legacy_async_storage_v1';
 
@@ -78,6 +78,12 @@ export class GymRepository {
       });
     }
 
+    if (currentVersion < 5) {
+      await this.db.withExclusiveTransactionAsync(async (tx) => {
+        await tx.execAsync(MIGRATION_V5);
+      });
+    }
+
     // If the legacy key is still present after an import, do not import it again.
     const previous = await this.db.getFirstAsync(
       'SELECT value FROM app_metadata WHERE key = ?', LEGACY_STATUS,
@@ -116,21 +122,29 @@ export class GymRepository {
       'SELECT id, started_at, finished_at, notes FROM workouts ORDER BY started_at DESC, id DESC',
     ) as WorkoutRow[];
     const movements = await this.db.getAllAsync(
-      'SELECT id, workout_id, exercise_id, position, notes FROM workout_movements ORDER BY position',
+      'SELECT id, workout_id, exercise_id, position, notes, rest_seconds, superset_group FROM workout_movements ORDER BY position',
     ) as MovementRow[];
     const sets = await this.db.getAllAsync(
-      'SELECT id, movement_id, position, reps, weight_kg, completed FROM workout_sets ORDER BY position',
+      'SELECT id, movement_id, position, reps, weight_kg, completed, duration_seconds, distance_meters, set_type FROM workout_sets ORDER BY position',
     ) as SetRow[];
     const byWorkout = new Map<string, WorkoutMovement[]>();
     const byMovement = new Map<string, TrainingSet[]>();
     for (const s of sets) {
       const list = byMovement.get(s.movement_id) ?? [];
-      list.push({ id: s.id, reps: s.reps, weightKg: s.weight_kg, completed: s.completed === 1 });
+      list.push({ id: s.id, reps: s.reps, weightKg: s.weight_kg, completed: s.completed === 1,
+        ...(s.duration_seconds !== null ? { durationSeconds: s.duration_seconds } : {}),
+        ...(s.distance_meters !== null ? { distanceMeters: s.distance_meters } : {}),
+        ...(s.set_type !== 'normal' ? { setType: s.set_type as TrainingSet['setType'] } : {}),
+      });
       byMovement.set(s.movement_id, list);
     }
     for (const m of movements) {
       const list = byWorkout.get(m.workout_id) ?? [];
-      list.push({ id: m.id, exerciseId: m.exercise_id, sets: byMovement.get(m.id) ?? [], ...(m.notes ? { notes: m.notes } : {}) });
+      list.push({ id: m.id, exerciseId: m.exercise_id, sets: byMovement.get(m.id) ?? [],
+        ...(m.notes ? { notes: m.notes } : {}),
+        ...(m.rest_seconds !== 90 ? { restSeconds: m.rest_seconds } : {}),
+        ...(m.superset_group ? { supersetGroup: m.superset_group } : {}),
+      });
       byWorkout.set(m.workout_id, list);
     }
     const snapshot: GymData = {
@@ -195,7 +209,7 @@ export class GymRepository {
       'SELECT id, name, description, created_at, updated_at FROM routine_templates ORDER BY updated_at DESC, id',
     ) as RoutineRow[];
     const movements = await this.db.getAllAsync(
-      'SELECT id, routine_id, exercise_id, position, target_sets, target_reps, target_weight_kg FROM routine_exercises ORDER BY routine_id, position',
+      'SELECT id, routine_id, exercise_id, position, target_sets, target_reps, target_weight_kg, target_duration_seconds, target_distance_meters FROM routine_exercises ORDER BY routine_id, position',
     ) as RoutineExerciseRow[];
     const days = await this.db.getAllAsync(
       'SELECT routine_id, weekday FROM routine_weekdays ORDER BY weekday',
@@ -204,7 +218,10 @@ export class GymRepository {
     const daysByRoutine = new Map<string, number[]>();
     for (const row of movements) {
       const list = exercisesByRoutine.get(row.routine_id) ?? [];
-      list.push({ id: row.id, exerciseId: row.exercise_id, sets: row.target_sets, reps: row.target_reps, weightKg: row.target_weight_kg });
+      list.push({ id: row.id, exerciseId: row.exercise_id, sets: row.target_sets, reps: row.target_reps, weightKg: row.target_weight_kg,
+        ...(row.target_duration_seconds !== null ? { durationSeconds: row.target_duration_seconds } : {}),
+        ...(row.target_distance_meters !== null ? { distanceMeters: row.target_distance_meters } : {}),
+      });
       exercisesByRoutine.set(row.routine_id, list);
     }
     for (const row of days) {
@@ -231,8 +248,9 @@ export class GymRepository {
       await tx.runAsync('DELETE FROM routine_weekdays WHERE routine_id = ?', routine.id);
       for (const [position, movement] of routine.exercises.entries()) {
         await tx.runAsync(
-          'INSERT INTO routine_exercises (id, routine_id, exercise_id, position, target_sets, target_reps, target_weight_kg) VALUES (?, ?, ?, ?, ?, ?, ?)',
+          'INSERT INTO routine_exercises (id, routine_id, exercise_id, position, target_sets, target_reps, target_weight_kg, target_duration_seconds, target_distance_meters) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
           movement.id, routine.id, movement.exerciseId, position, movement.sets, movement.reps, movement.weightKg,
+          movement.durationSeconds ?? null, movement.distanceMeters ?? null,
         );
       }
       for (const day of routine.days) {
@@ -287,13 +305,15 @@ async function writeWorkout(tx: SqlClient, workout: Workout): Promise<void> {
   await tx.runAsync('DELETE FROM workout_movements WHERE workout_id = ?', workout.id);
   for (const [mIndex, movement] of workout.movements.entries()) {
     await tx.runAsync(
-      'INSERT INTO workout_movements(id, workout_id, exercise_id, position, notes) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO workout_movements(id, workout_id, exercise_id, position, notes, rest_seconds, superset_group) VALUES (?, ?, ?, ?, ?, ?, ?)',
       movement.id, workout.id, movement.exerciseId, mIndex, movement.notes ?? '',
+      movement.restSeconds ?? 90, movement.supersetGroup ?? null,
     );
     for (const [sIndex, set] of movement.sets.entries()) {
       await tx.runAsync(
-        'INSERT INTO workout_sets(id, movement_id, position, reps, weight_kg, completed) VALUES (?, ?, ?, ?, ?, ?)',
+        'INSERT INTO workout_sets(id, movement_id, position, reps, weight_kg, completed, duration_seconds, distance_meters, set_type) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
         set.id, movement.id, sIndex, set.reps, set.weightKg, set.completed ? 1 : 0,
+        set.durationSeconds ?? null, set.distanceMeters ?? null, set.setType ?? 'normal',
       );
     }
   }

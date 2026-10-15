@@ -32,14 +32,19 @@ export function isGymData(value: unknown): value is GymData {
       if (!isRecord(movement) || typeof movement.id !== 'string' || !movement.id ||
         movementIds.has(movement.id) || typeof movement.exerciseId !== 'string' ||
         !movement.exerciseId || !Array.isArray(movement.sets) ||
-      (movement.notes !== undefined && (typeof movement.notes !== 'string' || movement.notes.length > 2000))) return false;
+      (movement.notes !== undefined && (typeof movement.notes !== 'string' || movement.notes.length > 2000)) ||
+      (movement.restSeconds !== undefined && (!Number.isSafeInteger(movement.restSeconds) || (movement.restSeconds as number) < 0 || (movement.restSeconds as number) > 600)) ||
+      (movement.supersetGroup !== undefined && (typeof movement.supersetGroup !== 'string' || !movement.supersetGroup || movement.supersetGroup.length > 80))) return false;
       movementIds.add(movement.id);
       return movement.sets.every((set: unknown) => {
         if (!isRecord(set) || typeof set.id !== 'string' || !set.id ||
           setIds.has(set.id) || typeof set.reps !== 'number' ||
           !Number.isSafeInteger(set.reps) || set.reps < 0 ||
           typeof set.weightKg !== 'number' || !Number.isFinite(set.weightKg) ||
-          set.weightKg < 0 || typeof set.completed !== 'boolean') return false;
+          set.weightKg < 0 || typeof set.completed !== 'boolean' ||
+          (set.durationSeconds !== undefined && (!Number.isSafeInteger(set.durationSeconds) || (set.durationSeconds as number) < 0 || (set.durationSeconds as number) > 86400)) ||
+          (set.distanceMeters !== undefined && (typeof set.distanceMeters !== 'number' || !Number.isFinite(set.distanceMeters) || set.distanceMeters < 0 || set.distanceMeters > 1000000)) ||
+          (set.setType !== undefined && !['normal','warmup','drop','failure'].includes(String(set.setType)))) return false;
         setIds.add(set.id);
         return true;
       });

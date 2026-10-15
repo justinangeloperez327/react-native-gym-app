@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
 import { findExercise } from '@/src/data/exercises';
-import { completedSets, formatDate, formatDuration, formatWeight, totalVolumeKg } from '@/src/lib/workouts';
+import { completedSets, formatDate, formatDuration, formatWeight, formatActivityTime, totalActivitySeconds, totalDistanceMeters, totalVolumeKg } from '@/src/lib/workouts';
 import { useGym } from '@/src/state/GymContext';
 import { useAppTheme } from '@/src/theme/colors';
 import type { Workout } from '@/src/types/gym';
@@ -29,6 +29,11 @@ export function WorkoutPreview({ workout }: { workout: Workout }) {
         <Text style={{ color: colors.text, fontSize: 13 }}>
           {completedSets(workout)} sets · {formatWeight(totalVolumeKg(workout), preferences.unit)} volume
         </Text>
+        {totalDistanceMeters(workout) > 0 || totalActivitySeconds(workout) > 0 ? (
+          <Text style={{ color: colors.muted, fontSize: 13 }}>
+            {(totalDistanceMeters(workout) / 1000).toFixed(2)} km · {formatActivityTime(totalActivitySeconds(workout))}
+          </Text>
+        ) : null}
       </Panel>
     </Pressable>
   );

@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Pressable, Text, TextInput, View } from 'react-native';
 import { AppButton, EmptyState, Heading, Page, Panel, SectionTitle } from '@/src/components/ui';
-import { activeExercises, canLogRepetitions, findExercise, searchExercises } from '@/src/data/exercises';
+import { activeExercises, findExercise, searchExercises } from '@/src/data/exercises';
 import { WEEKDAYS } from '@/src/data/routines';
 import { createId, toDisplayWeight, toKg } from '@/src/lib/workouts';
 import { useGym } from '@/src/state/GymContext';
@@ -37,7 +37,7 @@ export default function RoutineEditor() {
   }
 
   const editor = draft;
-  const candidates = searchExercises(activeExercises(customExercises).filter(canLogRepetitions), { query: search })
+  const candidates = searchExercises(activeExercises(customExercises), { query: search })
     .filter(exercise => !editor.exercises.some(m => m.exerciseId === exercise.id));
 
   function update(next: Partial<RoutineTemplate>) {
@@ -118,7 +118,7 @@ export default function RoutineEditor() {
       <View style={{ alignSelf: 'flex-start' }}>
         <AppButton title="Back to training" secondary onPress={() => router.back()} />
       </View>
-      <Heading title="Routine editor" subtitle="Build a reusable strength session" />
+      <Heading title="Routine editor" subtitle="Build a reusable strength or cardio session" />
       <Panel>
         <SectionTitle>Name</SectionTitle>
         <TextInput accessibilityLabel="Routine name" value={editor.name} onChangeText={name => update({ name })}
@@ -179,20 +179,26 @@ export default function RoutineEditor() {
               </View>
               <TargetStepper label="Sets" value={movement.sets} min={1} max={20}
                 onChange={sets => updateExercise(movement.id, { sets })} />
-              <TargetStepper label="Repetitions" value={movement.reps} min={1} max={1000}
-                onChange={reps => updateExercise(movement.id, { reps })} />
-              <Text style={{ color: colors.muted, fontSize: 13 }}>Target weight ({preferences.unit})</Text>
-              <TargetWeightInput
-                exerciseName={exercise?.name ?? 'exercise'}
-                weightKg={movement.weightKg}
-                unit={preferences.unit}
-                colors={colors}
-                onChange={weightKg => updateExercise(movement.id, { weightKg })}
-              />
+              {exercise?.tracking === 'duration' ? (
+                <TargetNumberInput label="Duration (seconds)" value={movement.durationSeconds ?? 60}
+                  onChange={durationSeconds => updateExercise(movement.id, { durationSeconds })} integer />
+              ) : exercise?.tracking === 'distance' ? (
+                <TargetNumberInput label="Distance (meters)" value={movement.distanceMeters ?? 1000}
+                  onChange={distanceMeters => updateExercise(movement.id, { distanceMeters })} />
+              ) : (
+                <>
+                  <TargetStepper label="Repetitions" value={movement.reps || 1} min={1} max={1000}
+                    onChange={reps => updateExercise(movement.id, { reps })} />
+                  <Text style={{ color: colors.muted, fontSize: 13 }}>Target weight ({preferences.unit})</Text>
+                  <TargetWeightInput exerciseName={exercise?.name ?? 'exercise'}
+                    weightKg={movement.weightKg} unit={preferences.unit} colors={colors}
+                    onChange={weightKg => updateExercise(movement.id, { weightKg })} />
+                </>
+              )}
             </Panel>
           );
         }) : <EmptyState title="No exercises added"
-          description="Add repetition-based exercises below. Timed and distance-based routines arrive with cardio logging." />}
+          description="Add strength, timed or distance-based activities below." />}
         <AppButton title={adding ? 'Hide exercise picker' : '+ Add exercise'} secondary
           onPress={() => setAdding(value => !value)} />
         {adding ? (
@@ -206,7 +212,10 @@ export default function RoutineEditor() {
                 accessibilityLabel={'Add ' + exercise.name}
                 onPress={() => {
                   update({ exercises: [...editor.exercises, {
-                    id: createId(), exerciseId: exercise.id, sets: 3, reps: 10, weightKg: 0,
+                    id: createId(), exerciseId: exercise.id, sets: 3,
+                    reps: exercise.tracking === 'reps' ? 10 : 0, weightKg: 0,
+                    ...(exercise.tracking === 'duration' ? { durationSeconds: 60 } : {}),
+                    ...(exercise.tracking === 'distance' ? { distanceMeters: 1000 } : {}),
                   }] });
                   setAdding(false);
                   setSearch('');
@@ -292,5 +301,29 @@ function TargetWeightInput({ exerciseName, weightKg, unit, colors, onChange }: {
         color: colors.text, backgroundColor: colors.background, borderColor: colors.border,
       }}
     />
+  );
+}
+
+function TargetNumberInput({ label, value, integer = false, onChange }: {
+  label: string; value: number; integer?: boolean; onChange: (value: number) => void;
+}) {
+  const { colors } = useAppTheme();
+  const [draft, setDraft] = useState(String(value));
+  useEffect(() => { setDraft(String(value)); }, [value]);
+  return (
+    <View style={{ gap: 4 }}>
+      <Text style={{ color: colors.muted, fontSize: 13 }}>{label}</Text>
+      <TextInput accessibilityLabel={label} keyboardType="decimal-pad" value={draft}
+        onChangeText={setDraft} onBlur={() => {
+          const next = Number(draft);
+          if (draft.trim() && Number.isFinite(next) && next >= 0 &&
+              next <= (integer ? 86400 : 1000000) && (!integer || Number.isSafeInteger(next))) {
+            onChange(next);
+          } else setDraft(String(value));
+        }}
+        style={{ minHeight: 44, borderWidth: 1, borderRadius: 6, paddingHorizontal: 12,
+          color: colors.text, backgroundColor: colors.background, borderColor: colors.border }}
+      />
+    </View>
   );
 }

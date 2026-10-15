@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 /** PRAGMA user_version advances atomically with the DDL transaction. */
 export const MIGRATION_V1 = [
@@ -34,4 +34,15 @@ export const MIGRATION_V4 = [
   "CREATE TABLE routine_weekdays (routine_id TEXT NOT NULL REFERENCES routine_templates(id) ON DELETE CASCADE, weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6), PRIMARY KEY(routine_id, weekday))",
   "CREATE INDEX idx_routine_weekdays_day ON routine_weekdays(weekday)",
   'PRAGMA user_version = 4',
+].join(';\n') + ';';
+
+export const MIGRATION_V5 = [
+  "ALTER TABLE workout_sets ADD COLUMN duration_seconds INTEGER",
+  "ALTER TABLE workout_sets ADD COLUMN distance_meters REAL",
+  "ALTER TABLE workout_sets ADD COLUMN set_type TEXT NOT NULL DEFAULT 'normal' CHECK(set_type IN ('normal','warmup','drop','failure'))",
+  "ALTER TABLE workout_movements ADD COLUMN rest_seconds INTEGER NOT NULL DEFAULT 90 CHECK(rest_seconds BETWEEN 0 AND 600)",
+  "ALTER TABLE workout_movements ADD COLUMN superset_group TEXT",
+  "ALTER TABLE routine_exercises ADD COLUMN target_duration_seconds INTEGER",
+  "ALTER TABLE routine_exercises ADD COLUMN target_distance_meters REAL",
+  'PRAGMA user_version = 5',
 ].join(';\n') + ';';

@@ -55,3 +55,11 @@ Previous-performance lookups only reference earlier completed sessions and never
 Each save replaces a routine's exercises and weekday assignments within a single transaction. On error, SQLite rolls the entire change back. Starting a routine creates a new workout with independent movement and set identifiers. Existing workout records do not depend on the template remaining present.
 
 Starter programs are available as user-initiated copies and are never installed automatically. Scheduling does not implement notifications.
+
+## Schema version 5 — advanced training and cardio
+
+The fifth migration adds nullable duration in seconds, distance in metres, and a set-type classification to `workout_sets`. It also introduces per-exercise rest targets and superset grouping IDs in `workout_movements`. `routine_exercises` receives optional duration/distance targets. Existing strength sets continue to store their original repetitions and kilogram weights, with default normal set type and 90-second rest preference.
+
+All new fields use the existing transactional workout and routine repositories. Legacy JSON imports remain valid; optional new fields are validated when present. Completed distance and activity-duration metrics are calculated only from completed sets and do not contribute to strength volume.
+
+Rest countdown state is UI-local and uses a wall-clock deadline; it is not a persisted background alarm or a notification.

@@ -205,6 +205,23 @@ The library can describe cardio and timed activities, but actual distance/durati
 
 **Scope:** Only repetition-based templates can start sessions. Cardio, timers, and distance targets remain in Group 7. Scheduling is recurring weekday guidance, not a notification service.
 
+## Group 7: Advanced Training and Cardio
+
+### Implemented
+- [x] SQLite schema version 5 with backward-compatible timed/cardio set fields, set types, rest targets and superset groups.
+- [x] Cardio and timed set entry with duration in seconds and distance in kilometres (stored as metres).
+- [x] Strength set types: normal, warmup, drop, and failure.
+- [x] Exercise-level rest targets, automatic wall-clock countdown, and manual stop/restart.
+- [x] Superset grouping and unpairing using adjacent exercise links.
+- [x] Advanced fields persist in active/completed workout history and survive app restart.
+- [x] Extend routine targets and workout creation to support timed and distance activities.
+- [x] Workout history cards and session summaries separate strength volume from cardio distance/time.
+- [x] Add migration, integrity, and mixed-activity calculation tests.
+- [ ] Verify CI on main.
+- [ ] Verify Android/iOS keyboard behavior, rest countdown on background/foreground, and native migration.
+
+**Scope limitations:** Superset group labels do not automatically alternate or schedule sets; rest timers do not send notifications and are not durable across an app process kill. Future usability tests will address these cases.
+
 ## Versioning
 
 Keep the app prerelease until Group 15. Version `0.1.0` identifies the current development baseline; it is not a claim of production readiness. Publish v1.0.0 only after the complete fitness core and quality gates above are satisfied.

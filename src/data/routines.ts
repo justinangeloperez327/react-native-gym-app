@@ -22,7 +22,7 @@ export function validateRoutine(routine: RoutineTemplate): void {
   for (const movement of routine.exercises) {
     if (!movement.id || !movement.exerciseId || !Number.isSafeInteger(movement.sets) ||
       movement.sets < 1 || movement.sets > 20 ||
-      !Number.isSafeInteger(movement.reps) || movement.reps < 1 || movement.reps > 1000 ||
+      !Number.isSafeInteger(movement.reps) || movement.reps < 0 || movement.reps > 1000 ||
       !Number.isFinite(movement.weightKg) || movement.weightKg < 0 || movement.weightKg > 10000) {
       throw new Error('Invalid exercise targets');
     }

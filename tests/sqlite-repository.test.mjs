@@ -58,7 +58,7 @@ test('initialization creates foreign-keyed schema once and defaults', async () =
   try {
     const repo = new GymRepository(db);
     await repo.initialize(async () => null);
-    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 4);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 5);
     assert.equal((await db.getFirstAsync('PRAGMA foreign_keys')).foreign_keys, 1);
     assert.deepEqual(await repo.readSnapshot(), {
       version: 1, workouts: [], preferences: { unit: 'kg', theme: 'system' },
@@ -181,14 +181,14 @@ test('newer database schema is never downgraded', async () => {
 });
 
 
-test('v1 to v4 migration preserves existing workout history and preference choices', async () => {
+test('v1 to v5 migration preserves existing workout history and preference choices', async () => {
   const db = new NativeTestDatabase();
   try {
     const repo = new GymRepository(db);
     await repo.initialize(async () => JSON.stringify(sample()));
-    await db.execAsync('DROP TABLE routine_weekdays; DROP TABLE routine_exercises; DROP TABLE routine_templates; DROP INDEX idx_custom_exercises_name; DROP INDEX idx_custom_exercises_kind; DROP TABLE custom_exercises; ALTER TABLE workouts DROP COLUMN notes; ALTER TABLE workout_movements DROP COLUMN notes; PRAGMA user_version = 1;');
+    await db.execAsync('DROP TABLE routine_weekdays; DROP TABLE routine_exercises; DROP TABLE routine_templates; ALTER TABLE workout_sets DROP COLUMN set_type; ALTER TABLE workout_sets DROP COLUMN duration_seconds; ALTER TABLE workout_sets DROP COLUMN distance_meters; ALTER TABLE workout_movements DROP COLUMN superset_group; ALTER TABLE workout_movements DROP COLUMN rest_seconds; DROP INDEX idx_custom_exercises_name; DROP INDEX idx_custom_exercises_kind; DROP TABLE custom_exercises; ALTER TABLE workouts DROP COLUMN notes; ALTER TABLE workout_movements DROP COLUMN notes; PRAGMA user_version = 1;');
     await repo.initialize(async () => { throw new Error('Legacy data should not be read twice'); });
-    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 4);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 5);
     assert.deepEqual(await repo.readSnapshot(), sample());
     assert.deepEqual(await repo.readCustomExercises(), []);
   } finally { db.close(); }
@@ -274,7 +274,7 @@ test('upgrading an actual v2 database adds note fields without rewriting workout
     const repo = new GymRepository(db);
     await repo.initialize(async () => null);
     const saved = await repo.readSnapshot();
-    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 4);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 5);
     assert.equal(saved.workouts[0].id, 'old-session');
     assert.equal(saved.workouts[0].movements[0].sets[0].weightKg, 80);
     assert.equal(saved.workouts[0].notes, undefined);
@@ -353,7 +353,7 @@ test('v3 to v4 schema migration preserves existing workout data and preferences'
     await repo.upsertWorkout(sample().workouts[0]);
     await repo.updatePreferences(sample().preferences);
     await repo.initialize(async () => null);
-    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 4);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 5);
     assert.deepEqual(await repo.readSnapshot(), sample());
     assert.deepEqual(await repo.readRoutines(), []);
   } finally { db.close(); }
@@ -446,5 +446,102 @@ test('invalid routine targets and duplicate exercises do not mutate SQLite state
       ],
     }), /unique/);
     assert.deepEqual(await repo.readRoutines(), []);
+  } finally { db.close(); }
+});
+
+
+test('v4 to v5 migration retains workouts and routine targets', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const { MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4 } = await import('../src/data/migrations.ts');
+    await db.execAsync('PRAGMA foreign_keys = ON;');
+    for (const script of [MIGRATION_V1, MIGRATION_V2, MIGRATION_V3, MIGRATION_V4]) await db.execAsync(script);
+    const repo = new GymRepository(db);
+    await repo.upsertWorkout(sample().workouts[0]);
+    const original = {
+      id: 'routine:prior', name: 'Existing plan', description: '',
+      createdAt: '2026-10-12T10:00:00.000Z', updatedAt: '2026-10-12T10:00:00.000Z',
+      days: [1], exercises: [{ id: 'routine-set', exerciseId: 'bench-press', sets: 3, reps: 10, weightKg: 30 }],
+    };
+    await db.runAsync('INSERT OR REPLACE INTO routine_templates(id, name, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+      original.id, original.name, original.description, original.createdAt, original.updatedAt);
+    await db.runAsync('INSERT OR REPLACE INTO routine_exercises(id, routine_id, exercise_id, position, target_sets, target_reps, target_weight_kg) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      'routine-set', original.id, 'bench-press', 0, 3, 10, 30);
+    await db.runAsync('INSERT OR IGNORE INTO routine_weekdays(routine_id, weekday) VALUES (?, ?)', original.id, 1);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 4);
+    await repo.initialize(async () => null);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 5);
+    assert.deepEqual((await repo.readSnapshot()).workouts, sample().workouts);
+    assert.deepEqual(await repo.readRoutines(), [original]);
+  } finally { db.close(); }
+});
+
+test('advanced sets, timed cardio and supersets survive SQLite round trip', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => null);
+    const w = {
+      ...sample().workouts[0],
+      movements: [
+        {
+          ...sample().workouts[0].movements[0],
+          restSeconds: 45, supersetGroup: 'superset:pair',
+          sets: [
+            { id: 'a', reps: 10, weightKg: 30, completed: true, setType: 'warmup' },
+            { id: 'b', reps: 8, weightKg: 60, completed: true, setType: 'drop' },
+          ],
+        },
+        {
+          id: 'cardio-movement', exerciseId: 'outdoor-run',
+          supersetGroup: 'superset:pair', restSeconds: 0,
+          sets: [{
+            id: 'c', reps: 0, weightKg: 0, completed: true, durationSeconds: 1350,
+            distanceMeters: 3250,
+          }],
+        },
+      ],
+    };
+    await repo.upsertWorkout(w);
+    const actual = (await repo.readSnapshot()).workouts[0];
+    assert.deepEqual(actual, w);
+    await repo.upsertWorkout({ ...w, finishedAt: '2026-10-12T11:00:00.000Z' });
+    assert.equal((await repo.readSnapshot()).workouts[0].movements[1].sets[0].distanceMeters, 3250);
+  } finally { db.close(); }
+});
+
+test('invalid cardio durations and set types roll back without mutating data', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => null);
+    await repo.upsertWorkout(sample().workouts[0]);
+    const badSet = sample().workouts[0].movements[0].sets[0];
+    for (const change of [{ durationSeconds: -1 }, { durationSeconds: 2.5 }, { distanceMeters: -10 },
+      { distanceMeters: Number.POSITIVE_INFINITY }, { setType: 'nonsense' }]) {
+      const movement = { ...sample().workouts[0].movements[0], sets: [{ ...badSet, ...change }] };
+      await assert.rejects(repo.upsertWorkout({ ...sample().workouts[0], movements: [movement] }), /Invalid workout/);
+    }
+    assert.deepEqual((await repo.readSnapshot()).workouts[0], sample().workouts[0]);
+  } finally { db.close(); }
+});
+
+test('routine distance and timed targets round trip through v5 schema', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => null);
+    const routine = {
+      id: 'routine:mixed', name: 'Mixed conditioning', description: '',
+      createdAt: '2026-10-12T10:00:00.000Z', updatedAt: '2026-10-12T10:00:00.000Z',
+      days: [2, 5], exercises: [
+        { id: 'tempo', exerciseId: 'plank', sets: 3, reps: 0, weightKg: 0, durationSeconds: 50 },
+        { id: 'dist', exerciseId: 'outdoor-run', sets: 1, reps: 0, weightKg: 0, distanceMeters: 5000 },
+      ],
+    };
+    await repo.saveRoutine(routine);
+    assert.deepEqual(await repo.readRoutines(), [routine]);
+    await repo.saveRoutine({ ...routine, exercises: [routine.exercises[1]] });
+    assert.equal((await repo.readRoutines())[0].exercises.length, 1);
   } finally { db.close(); }
 });

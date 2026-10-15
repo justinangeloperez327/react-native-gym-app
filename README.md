@@ -4,7 +4,7 @@
 
 The approved product includes **workouts, cardio, nutrition, hydration, body measurements, goals and wellbeing**. The app is offline-first and will not require an account for v1.0.
 
-> The repository currently contains a working *starter implementation* with five navigation tabs, workout logging, an expanded activity library, locally stored custom exercises, session history and settings. Nutrition and wellbeing are planned but **not yet implemented**. Cardio and timed exercise **logging** is planned for Group 7; these entries are currently library-only. Workout storage now uses native SQLite; existing AsyncStorage records are imported on upgrade.
+> The repository currently contains a working *starter implementation* with five navigation tabs, workout logging, an expanded activity library, locally stored custom exercises, session history and settings. Nutrition and wellbeing are planned but **not yet implemented**. Cardio and timed exercise logging are available in the workout editor. Workout storage now uses native SQLite; existing AsyncStorage records are imported on upgrade.
 
 See the [approved product roadmap](docs/product-plan.md) for the scope and 15 implementation groups.
 
@@ -95,7 +95,7 @@ See [SQLite migration details](docs/sqlite.md).
 
 ## Exercise library (Group 4)
 
-The catalog contains built-in strength, bodyweight, and cardio activities, with stable built-in IDs used by historical workouts. Custom exercises live in the version-2 SQLite `custom_exercises` table. Archiving removes entries from new-workout selection but preserves their names for existing workouts. Search supports activity type, muscle group, equipment and text. Current workout set entry supports only repetition-based activities; duration and distance logging arrives in Group 7.
+The catalog contains built-in strength, bodyweight, and cardio activities, with stable built-in IDs used by historical workouts. Custom exercises live in the version-2 SQLite `custom_exercises` table. Archiving removes entries from new-workout selection but preserves their names for existing workouts. Search supports activity type, muscle group, equipment and text. Current workout entry supports repetition, duration and distance-based activities.
 
 ## Workout persistence and recovery (Group 5)
 
@@ -109,4 +109,14 @@ Previous-performance references use the latest *completed* earlier workout for t
 
 From **Train**, create a personal routine or import one of three starter programs. Edit its name, instructions, exercises, order, targets, and days of the week (Sunday–Saturday, device-local). The Train screen highlights templates assigned for the current weekday and lets you start them.
 
-Starting a routine creates a **new saved workout** with fresh movement/set IDs and incomplete sets; the template remains unchanged. You can reuse, duplicate (without copying its schedule), or delete a routine without deleting recorded sessions. All templates and weekly assignments live in SQLite schema version 4. Assignments do not create notifications or automatically launch a workout; reminder support is outside the current scope. Only repetition-based routines can be executed until cardio/timed logging arrives in Group 7.
+Starting a routine creates a **new saved workout** with fresh movement/set IDs and incomplete sets; the template remains unchanged. You can reuse, duplicate (without copying its schedule), or delete a routine without deleting recorded sessions. All templates and weekly assignments live in SQLite schema version 4. Assignments do not create notifications or automatically launch a workout; reminder support is outside the current scope. Routines can also contain duration and distance targets, which become independent workout entries when started.
+
+## Advanced training and cardio (Group 7)
+
+The workout editor supports repetitions and weights, bodyweight timed holds, and cardio with duration (seconds) and distance (kilometres). Saved values are stored as **seconds** and **metres**, independently of presentation. Completed workout summaries show logged distance and exercise duration separately from strength training volume.
+
+Repetition sets can be marked **normal, warmup, drop, or failure**. Individual exercises have configurable rest targets (0–600 seconds). A rest countdown automatically starts after a completed set, except when the exercise is grouped with a later superset partner. The countdown is based on an absolute deadline so it corrects after backgrounding, but it does not send notifications and is not retained across process termination.
+
+Pair an exercise with the previous workout movement to make a superset; you can also unpair it. Superset grouping is stored with the workout and survives reopening the session. This version does not implement automatic alternating sets or sophisticated superset sequencing.
+
+The exercise picker and reusable routines now allow timed and distance-based activities. Routine targets can include duration or distance as well as rep/weight values. SQLite schema **version 5** adds the optional measurement fields, set types, rest targets, and superset group IDs; previous records retain their original meaning.

@@ -2,7 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { AppButton, EmptyState, Heading, Page, Panel } from '@/src/components/ui';
-import { activeExercises, canLogRepetitions, searchExercises } from '@/src/data/exercises';
+import { activeExercises, searchExercises } from '@/src/data/exercises';
 import { useGym } from '@/src/state/GymContext';
 import { useAppTheme } from '@/src/theme/colors';
 
@@ -13,7 +13,7 @@ export default function ExercisePicker() {
   const [search, setSearch] = useState('');
   const workout = workouts.find((item) => item.id === workoutId);
   const matches = useMemo(() =>
-    searchExercises(activeExercises(customExercises).filter(canLogRepetitions), { query: search }),
+    searchExercises(activeExercises(customExercises), { query: search }),
     [search, customExercises]);
 
   if (!workout || workout.finishedAt) {
@@ -24,14 +24,14 @@ export default function ExercisePicker() {
   return (
     <Page>
       <AppButton title="Back to workout" onPress={() => router.back()} secondary />
-      <Heading title="Add an exercise" subtitle="Choose a repetition-based movement." />
+      <Heading title="Add an exercise" subtitle="Choose a strength, cardio or timed activity." />
       <TextInput accessibilityLabel="Search exercise to add" placeholder="Search exercises"
         placeholderTextColor={colors.muted} value={search} onChangeText={setSearch}
         style={{ backgroundColor: colors.surface, color: colors.text, borderColor: colors.border,
           borderWidth: 1, paddingHorizontal: 12, minHeight: 46, borderRadius: 6 }}
       />
       <Text style={{ color: colors.muted, fontSize: 13 }}>
-        Timed and cardio logging will be available in Group 7.
+        Log repetitions, durations or distances in the workout editor.
       </Text>
       {matches.map((exercise) => {
         const added = workout.movements.some((movement) => movement.exerciseId === exercise.id);
@@ -44,7 +44,7 @@ export default function ExercisePicker() {
                 <View style={{ flex: 1, gap: 6 }}>
                   <Text style={{ color: colors.text, fontWeight: '600', fontSize: 15 }}>{exercise.name}</Text>
                   <Text style={{ color: colors.muted, fontSize: 13 }}>
-                    {exercise.muscle} · {exercise.equipment} · {exercise.kind}
+                    {exercise.muscle} · {exercise.equipment} · {exercise.tracking}
                   </Text>
                 </View>
                 <Text style={{ color: added ? colors.muted : colors.primary, fontWeight: '600' }}>

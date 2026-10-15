@@ -2,10 +2,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AppState } from 'react-native';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { openGymRepository } from '@/src/data/sqlite-native';
-import { canLogRepetitions, findExercise, hasExerciseName, normalizeExerciseInput } from '@/src/data/exercises';
+import { findExercise, hasExerciseName, normalizeExerciseInput } from '@/src/data/exercises';
 import { emptyGymData, LEGACY_KEY } from '@/src/data/legacy';
 import type { GymRepository } from '@/src/data/gym-repository';
-import { createId, previousCompletedSets } from '@/src/lib/workouts';
+import { createId, previousCompletedSets, defaultSetForTracking, copySetForNewSession } from '@/src/lib/workouts';
 import { buildStarterRoutine, createRoutineTemplate, duplicateRoutineTemplate, routineToWorkout, validateRoutine } from '@/src/data/routines';
 import type { Exercise, ExerciseInput, GymData, Preferences, TrainingSet, Workout, WorkoutMovement, RoutineTemplate } from '@/src/types/gym';
 
@@ -33,6 +33,8 @@ type GymContextValue = {
   removeSet: (workoutId: string, movementId: string, setId: string) => void;
   copyPreviousSets: (workoutId: string, movementId: string) => void;
   addMovement: (workoutId: string, exerciseId: string) => void;
+  setRestSeconds: (workoutId: string, movementId: string, seconds: number) => void;
+  toggleSupersetWithPrevious: (workoutId: string, movementId: string) => void;
   addSet: (workoutId: string, movementId: string) => void;
   updateSet: (workoutId: string, movementId: string, setId: string, patch: Partial<TrainingSet>) => void;
   removeMovement: (workoutId: string, movementId: string) => void;
@@ -233,7 +235,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
     validateRoutine(template);
     for (const movement of template.exercises) {
       const exercise = findExercise(movement.exerciseId, customRef.current);
-      if (!exercise || exercise.archived || !canLogRepetitions(exercise)) {
+      if (!exercise || exercise.archived) {
         throw new Error('This routine contains an unavailable or unsupported exercise.');
       }
     }
@@ -285,7 +287,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
     // a workout with an unknown movement.
     for (const movement of routine.exercises) {
       const exercise = findExercise(movement.exerciseId, customRef.current);
-      if (!exercise || exercise.archived || !canLogRepetitions(exercise)) {
+      if (!exercise || exercise.archived) {
         throw new Error('This routine contains an archived or unsupported exercise.');
       }
     }
@@ -334,12 +336,12 @@ export function GymProvider({ children }: { children: ReactNode }) {
 
   const addMovement = useCallback((workoutId: string, exerciseId: string) => {
     const exercise = findExercise(exerciseId, customRef.current);
-    if (!exercise || exercise.archived || !canLogRepetitions(exercise)) return;
+    if (!exercise || exercise.archived) return;
     applyWorkout(workoutId, (workout) => {
       if (workout.finishedAt || workout.movements.some((m) => m.exerciseId === exerciseId)) return workout;
       const movement: WorkoutMovement = {
         id: createId(), exerciseId,
-        sets: [{ id: createId(), reps: 10, weightKg: 0, completed: false }],
+        sets: [defaultSetForTracking(exercise.tracking)],
       };
       return { ...workout, movements: [...workout.movements, movement] };
     });
@@ -353,12 +355,11 @@ export function GymProvider({ children }: { children: ReactNode }) {
         movements: workout.movements.map((movement) => {
           if (movement.id !== movementId) return movement;
           const previous = movement.sets[movement.sets.length - 1];
+          const exercise = findExercise(movement.exerciseId, customRef.current);
           return {
             ...movement,
-            sets: [...movement.sets, {
-              id: createId(), reps: previous?.reps ?? 10,
-              weightKg: previous?.weightKg ?? 0, completed: false,
-            }],
+            sets: [...movement.sets, previous ? copySetForNewSession(previous)
+              : defaultSetForTracking(exercise?.tracking ?? 'reps')],
           };
         }),
       };
@@ -405,9 +406,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
     applyWorkout(workoutId, (existing) => ({
       ...existing,
       movements: existing.movements.map((item) => item.id === movementId
-        ? { ...item, sets: prior.map((set) => ({
-            id: createId(), reps: set.reps, weightKg: set.weightKg, completed: false,
-          })) }
+        ? { ...item, sets: prior.map(copySetForNewSession) }
         : item),
     }));
   }, [applyWorkout]);
@@ -429,6 +428,35 @@ export function GymProvider({ children }: { children: ReactNode }) {
     }, (repo, next) => {
       const movement = next.movements.find((m) => m.id === movementId);
       return repo.updateMovementNotes(movementId, movement?.notes ?? '');
+    });
+  }, [applyWorkout]);
+
+  const setRestSeconds = useCallback((workoutId: string, movementId: string, seconds: number) => {
+    if (!Number.isSafeInteger(seconds) || seconds < 0 || seconds > 600) return;
+    applyWorkout(workoutId, (workout) => {
+      if (workout.finishedAt) return workout;
+      return { ...workout, movements: workout.movements.map((m) =>
+        m.id === movementId ? { ...m, restSeconds: seconds } : m) };
+    });
+  }, [applyWorkout]);
+
+  const toggleSupersetWithPrevious = useCallback((workoutId: string, movementId: string) => {
+    applyWorkout(workoutId, (workout) => {
+      if (workout.finishedAt) return workout;
+      const index = workout.movements.findIndex((m) => m.id === movementId);
+      if (index < 1) return workout;
+      const prior = workout.movements[index - 1];
+      const selected = workout.movements[index];
+      if (selected.supersetGroup && selected.supersetGroup === prior.supersetGroup) {
+        const group = selected.supersetGroup;
+        const next = workout.movements.map(m => m.id === selected.id ? { ...m, supersetGroup: undefined } : m);
+        const remaining = next.filter(m => m.supersetGroup === group);
+        return { ...workout, movements: next.map(m =>
+          remaining.length < 2 && m.supersetGroup === group ? { ...m, supersetGroup: undefined } : m) };
+      }
+      const group = prior.supersetGroup ?? 'superset:' + createId();
+      return { ...workout, movements: workout.movements.map(m =>
+        m.id === prior.id || m.id === selected.id ? { ...m, supersetGroup: group } : m) };
     });
   }, [applyWorkout]);
 
@@ -478,7 +506,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
       ready, error, saveStatus, retrySave, workouts: data.workouts, preferences: data.preferences,
       customExercises, createCustomExercise, updateCustomExercise, archiveCustomExercise,
       routines, saveRoutine, createRoutine, importStarterRoutine, duplicateRoutine, deleteRoutine, startRoutineWorkout,
-      startWorkout, addMovement, addSet, removeSet, copyPreviousSets,
+      startWorkout, addMovement, setRestSeconds, toggleSupersetWithPrevious, addSet, removeSet, copyPreviousSets,
       setWorkoutNotes, setMovementNotes, updateSet, removeMovement,
       finishWorkout, deleteWorkout, updatePreferences,
     }}>

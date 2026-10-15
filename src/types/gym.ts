@@ -21,8 +21,13 @@ export type Exercise = {
 };
 export type ExerciseInput = Pick<Exercise, 'name' | 'muscle' | 'equipment' | 'kind' | 'tracking'>;
 
-export type TrainingSet = { id: string; reps: number; weightKg: number; completed: boolean };
-export type WorkoutMovement = { id: string; exerciseId: string; sets: TrainingSet[]; notes?: string };
+export const SET_TYPES = ['normal', 'warmup', 'drop', 'failure'] as const;
+export type SetType = (typeof SET_TYPES)[number];
+export type TrainingSet = {
+  id: string; reps: number; weightKg: number; completed: boolean;
+  durationSeconds?: number; distanceMeters?: number; setType?: SetType;
+};
+export type WorkoutMovement = { id: string; exerciseId: string; sets: TrainingSet[]; notes?: string; restSeconds?: number; supersetGroup?: string };
 export type Workout = { id: string; startedAt: string; finishedAt: string | null; movements: WorkoutMovement[]; notes?: string };
 export type GymData = { version: 1; workouts: Workout[]; preferences: Preferences };
 
@@ -32,6 +37,8 @@ export type RoutineExercise = {
   sets: number;
   reps: number;
   weightKg: number;
+  durationSeconds?: number;
+  distanceMeters?: number;
 };
 export type RoutineTemplate = {
   id: string;
