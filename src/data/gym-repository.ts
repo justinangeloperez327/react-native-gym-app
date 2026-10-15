@@ -27,6 +27,12 @@ export interface SqlDatabase extends SqlClient {
 
 type CountRow = { total: number };
 type SchemaRow = { user_version: number };
+export type StorageHealth = {
+  schemaVersion: number;
+  integrityOk: boolean;
+  foreignKeyViolations: number;
+  foreignKeysEnabled: boolean;
+};
 type KeyRow = { value: string };
 type PrefRow = { weight_unit: string; theme: string };
 type WorkoutRow = { id: string; started_at: string; finished_at: string | null; notes: string };
@@ -160,6 +166,25 @@ export class GymRepository {
         legacy ? (count.total === 0 && !customized ? 'imported' : 'existing_sqlite_kept') : 'absent',
       );
     });
+  }
+
+  /**
+   * Explicit, read-only diagnostics. Do not run full-file checks on every launch:
+   * they scan the database and may delay startup for long training histories.
+   */
+  async checkStorageHealth(): Promise<StorageHealth> {
+    const [schema, integrity, foreignKeys, violations] = await Promise.all([
+      this.db.getFirstAsync('PRAGMA user_version') as Promise<SchemaRow | null>,
+      this.db.getFirstAsync('PRAGMA quick_check(1)') as Promise<{ quick_check: string } | null>,
+      this.db.getFirstAsync('PRAGMA foreign_keys') as Promise<{ foreign_keys: number } | null>,
+      this.db.getAllAsync('PRAGMA foreign_key_check'),
+    ]);
+    return {
+      schemaVersion: schema?.user_version ?? -1,
+      integrityOk: integrity?.quick_check === 'ok',
+      foreignKeyViolations: violations.length,
+      foreignKeysEnabled: foreignKeys?.foreign_keys === 1,
+    };
   }
 
   async readSnapshot(): Promise<GymData> {

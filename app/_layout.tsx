@@ -3,11 +3,11 @@ import { StatusBar } from 'expo-status-bar';
 import { Text, View } from 'react-native';
 import { GymProvider, useGym } from '@/src/state/GymContext';
 import { useAppTheme } from '@/src/theme/colors';
-import { LoadingScreen } from '@/src/components/ui';
+import { AppButton, LoadingScreen } from '@/src/components/ui';
 import { WelcomeScreen } from '@/src/components/Welcome';
 
 function Navigation() {
-  const { ready, error, welcomeDone } = useGym();
+  const { ready, error, welcomeDone, retryInitialization } = useGym();
   const { colors, dark } = useAppTheme();
 
   if (!ready && !error) return <LoadingScreen />;
@@ -15,7 +15,11 @@ function Navigation() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, justifyContent: 'center', padding: 24, gap: 10 }}>
         <Text style={{ color: colors.text, fontSize: 21, fontWeight: '700' }}>Unable to open gym data</Text>
-        <Text style={{ color: colors.muted, lineHeight: 21 }}>{error}</Text>
+        <Text accessibilityRole="alert" style={{ color: colors.muted, lineHeight: 21 }}>{error}</Text>
+        <AppButton title="Retry opening local database" onPress={retryInitialization} />
+        <Text style={{ color: colors.muted, lineHeight: 20, fontSize: 13 }}>
+          Retry is non-destructive. Do not clear app storage or reinstall before securing a backup.
+        </Text>
       </View>
     );
   }

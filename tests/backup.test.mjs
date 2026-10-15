@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseBackup, serializeBackup, validateBackup, BACKUP_MAX_BYTES, describeBackup } from '../src/data/backup.ts';
+import { parseBackup, serializeBackup, validateBackup, BACKUP_MAX_BYTES, describeBackup, utf8ByteLength } from '../src/data/backup.ts';
 
 const base = () => ({
   format: 'react-native-gym-app-backup', version: 1, createdAt: '2026-10-15T07:00:00.000Z',
@@ -45,4 +45,14 @@ test('format preserves optional goals and exact floating-point nutrition snapsho
       fatPerServing: 6.7,
     }] };
   assert.deepEqual(parseBackup(serializeBackup(backup)), backup);
+});
+
+
+test('backup size limit uses UTF-8 bytes, not JavaScript code units', () => {
+  assert.equal(utf8ByteLength('plain'), 5);
+  assert.equal(utf8ByteLength('你好'), 6);
+  assert.equal(utf8ByteLength('🙂'), 4);
+  const huge = '🔥'.repeat(Math.floor(BACKUP_MAX_BYTES / 4) + 1);
+  assert.ok(huge.length < BACKUP_MAX_BYTES);
+  assert.throws(() => parseBackup(huge), /12 MB/);
 });

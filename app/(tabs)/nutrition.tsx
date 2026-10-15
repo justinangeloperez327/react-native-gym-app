@@ -24,6 +24,7 @@ export default function NutritionScreen() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [quantity, setQuantity] = useState('1');
   const [showLibrary, setShowLibrary] = useState(false);
+  const [libraryLimit, setLibraryLimit] = useState(15);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -174,7 +175,7 @@ export default function NutritionScreen() {
         <SectionTitle>My foods ({activeCount})</SectionTitle>
         <AppButton title={showLibrary ? 'Hide food library' : 'Manage food library'} secondary
           onPress={() => setShowLibrary(v => !v)} />
-        {showLibrary ? foods.filter(food => !food.archived).map(food => (
+        {showLibrary ? foods.filter(food => !food.archived).slice(0, libraryLimit).map(food => (
           <Pressable key={food.id} accessibilityRole="button"
             accessibilityLabel={'Edit ' + food.name}
             onPress={() => router.push({ pathname: '/food-editor', params: { id: food.id } })}>
@@ -187,6 +188,9 @@ export default function NutritionScreen() {
             </Panel>
           </Pressable>
         )) : null}
+        {showLibrary && activeCount > libraryLimit ? <AppButton secondary
+          title={'Show more foods (' + (activeCount - libraryLimit) + ')'}
+          onPress={() => setLibraryLimit(n => n + 15)} /> : null}
       </View>
       {error ? <Text accessibilityRole="alert" style={{ color: colors.danger }}>{error}</Text> : null}
       <Text style={{ color: colors.muted, fontSize: 12, lineHeight: 18 }}>

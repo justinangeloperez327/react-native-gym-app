@@ -328,6 +328,33 @@ All observations are optional and self-reported. Missing data never counts as an
 ### Restore policy and limitations
 Restore **replaces** existing local data; it is not a merge operation. The user must first save the current journal if desired. Backup files are unencrypted, contain potentially sensitive personal health and fitness information, and must be stored privately. Export requires the user to complete a share/save action outside the app; automatic/cloud backup is not included. Backup import limit is 12 MB pending native performance verification.
 
+## Group 14: Quality, Accessibility, Performance and Stability
+
+### Automated stabilization implementation
+- [x] Add safe retry on a failed database startup without erasing journal records.
+- [x] Read-only, user-initiated storage health checks (SQLite quick check, foreign keys and schema version).
+- [x] Surface pending preference/workout save errors and an explicit retry in Settings.
+- [x] Restrict initial rendering for long active session, routine and food lists; retain accessible Show more controls.
+- [x] Correct last-completed-workout selection and avoid future-dated workouts in recent home summaries.
+- [x] Use true UTF-8 byte length when enforcing the backup export/import size limit.
+- [x] Fix contrast semantics for primary destructive actions in the shared button component.
+- [x] Add SQLite foreign-key diagnostics, stress-history and backup-size regression tests.
+- [x] Add production Metro export for Android and iOS to CI (JavaScript bundle smoke test, not a native install).
+- [ ] Verify final CI on main.
+
+### Native release blockers (still unverified; do not imply pass)
+- [ ] Android and iOS cold-start, onboarding, airplane mode, and navigation smoke test.
+- [ ] Interrupted/backgrounded workout and rest timer persistence on actual phones.
+- [ ] Body, nutrition, hydration and recovery date/time/keyboard entry verification.
+- [ ] System picker → restore and share-sheet → external backup round trip using device file providers.
+- [ ] Screen reader traversal, dynamic font scaling, contrast and 44 pt/dp targets at minimum device width.
+- [ ] Long-list responsiveness, large 12 MB backup behavior and device memory pressure.
+- [ ] Relaunch after force-stop, airplane mode changes and OS memory reclaim without data loss.
+- [ ] Android/iOS release-candidate production binary install, launch and crash-free verification (Group 15).
+
+### Acceptance boundary
+Automated TypeScript, integration and bundle checks do not substitute for native end-to-end testing. Full Group 14 device QA remains an explicit **release blocker** until signed off on the test matrix in `docs/qa-device-matrix.md`. Do not tag `v1.0.0` or claim a store-ready release solely on CI success.
+
 ## Versioning
 
 Keep the app prerelease until Group 15. Version `0.1.0` identifies the current development baseline; it is not a claim of production readiness. Publish v1.0.0 only after the complete fitness core and quality gates above are satisfied.

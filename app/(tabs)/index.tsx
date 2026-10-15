@@ -1,8 +1,9 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, Text, View } from 'react-native';
 import { AppButton, EmptyState, Metric, Page, Panel, ScreenHeader, SectionTitle } from '@/src/components/ui';
 import { WorkoutPreview } from '@/src/components/WorkoutPreview';
+import { finishedWorkouts } from '@/src/lib/analytics';
 import { completedSets, formatWeight, totalVolumeKg } from '@/src/lib/workouts';
 import { formatSleep, recoveryByDate } from '@/src/lib/recovery';
 import { localDateKey } from '@/src/lib/body-metrics';
@@ -13,11 +14,12 @@ export default function HomeScreen() {
   const { workouts, preferences, startWorkout, error, recoveryEntries } = useGym();
   const { colors } = useAppTheme();
   const [starting, setStarting] = useState(false);
-  const finished = workouts.filter((workout) => workout.finishedAt);
+  const [visibleActive, setVisibleActive] = useState(5);
+  const finished = useMemo(() => finishedWorkouts(workouts), [workouts]);
   const active = workouts.filter((workout) => !workout.finishedAt);
   const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const weekly = finished.filter((workout) =>
-    workout.finishedAt && Date.parse(workout.finishedAt) >= cutoff,
+    workout.finishedAt && Date.parse(workout.finishedAt) >= cutoff && Date.parse(workout.finishedAt) <= Date.now(),
   );
   const sets = weekly.reduce((sum, workout) => sum + completedSets(workout), 0);
   const volume = weekly.reduce((sum, workout) => sum + totalVolumeKg(workout), 0);
@@ -46,7 +48,11 @@ export default function HomeScreen() {
       {active.length ? (
         <View style={{ gap: 10 }}>
           <SectionTitle>In progress</SectionTitle>
-          {active.map((workout) => <WorkoutPreview key={workout.id} workout={workout} />)}
+          {active.slice(0, visibleActive).map((workout) =>
+            <WorkoutPreview key={workout.id} workout={workout} />)}
+          {active.length > visibleActive ? <AppButton secondary
+            title={'Show more active sessions (' + (active.length - visibleActive) + ')'}
+            onPress={() => setVisibleActive(count => count + 5)} /> : null}
         </View>
       ) : null}
       <View style={{ gap: 10 }}>

@@ -1099,3 +1099,49 @@ test('invalid backup is rejected before any existing record is removed', async (
     assert.deepEqual((await repo.readSnapshot()).workouts, sample().workouts);
   } finally { db.close(); }
 });
+
+
+test('read-only diagnostics report healthy schema, foreign keys and integrity', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => null);
+    const check = await repo.checkStorageHealth();
+    assert.deepEqual(check, {
+      schemaVersion: 9, integrityOk: true, foreignKeyViolations: 0, foreignKeysEnabled: true,
+    });
+    assert.equal((await db.getFirstAsync('SELECT COUNT(*) AS n FROM workouts')).n, 0);
+    assert.equal((await db.getFirstAsync('PRAGMA user_version')).user_version, 9);
+  } finally { db.close(); }
+});
+
+test('storage diagnostics detect orphaned children without modifying them', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => null);
+    // Simulate a database that was modified outside the app with FK checks off.
+    await db.execAsync('PRAGMA foreign_keys = OFF');
+    await db.runAsync('INSERT INTO workout_movements(id,workout_id,exercise_id,position) VALUES(?,?,?,?)',
+      'orphan-movement', 'missing-workout', 'bench-press', 0);
+    await db.execAsync('PRAGMA foreign_keys = ON');
+    const check = await repo.checkStorageHealth();
+    assert.equal(check.integrityOk, true); // SQLite quick_check doesn't check relationships.
+    assert.equal(check.foreignKeysEnabled, true);
+    assert.equal(check.foreignKeyViolations, 1);
+    assert.equal((await db.getFirstAsync('SELECT COUNT(*) AS n FROM workout_movements')).n, 1);
+  } finally { db.close(); }
+});
+
+test('storage diagnostics surface disabled foreign-key enforcement', async () => {
+  const db = new NativeTestDatabase();
+  try {
+    const repo = new GymRepository(db);
+    await repo.initialize(async () => null);
+    await db.execAsync('PRAGMA foreign_keys = OFF');
+    const report = await repo.checkStorageHealth();
+    assert.equal(report.foreignKeysEnabled, false);
+    assert.equal(report.foreignKeyViolations, 0);
+    assert.equal(report.integrityOk, true);
+  } finally { db.close(); }
+});

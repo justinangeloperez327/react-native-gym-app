@@ -10,6 +10,16 @@ export const BACKUP_VERSION = 1;
 export const BACKUP_MAX_BYTES = 12 * 1024 * 1024;
 const MAX_ITEMS = 100000;
 
+/** Count bytes without allocating a second 12 MB UTF-8 buffer. */
+export function utf8ByteLength(value: string): number {
+  let size = 0;
+  for (const symbol of value) {
+    const code = symbol.codePointAt(0)!;
+    size += code <= 0x7f ? 1 : code <= 0x7ff ? 2 : code <= 0xffff ? 3 : 4;
+  }
+  return size;
+}
+
 function ensure(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error('Invalid backup: ' + message);
 }
@@ -135,7 +145,7 @@ export function validateBackup(input: unknown): GymBackup {
 }
 
 export function parseBackup(text: string): GymBackup {
-  ensure(typeof text === 'string' && text.length <= BACKUP_MAX_BYTES && text.length > 0,
+  ensure(typeof text === 'string' && text.length > 0 && utf8ByteLength(text) <= BACKUP_MAX_BYTES,
     'file is empty or exceeds 12 MB');
   let value: unknown;
   try { value = JSON.parse(text); }
@@ -146,7 +156,7 @@ export function parseBackup(text: string): GymBackup {
 export function serializeBackup(backup: GymBackup): string {
   validateBackup(backup);
   const output = JSON.stringify(backup, null, 2);
-  ensure(output.length <= BACKUP_MAX_BYTES, 'backup exceeds the supported 12 MB export limit');
+  ensure(utf8ByteLength(output) <= BACKUP_MAX_BYTES, 'backup exceeds the supported 12 MB export limit');
   return output;
 }
 

@@ -5,13 +5,15 @@ import { openGymRepository } from '@/src/data/sqlite-native';
 import { findExercise, hasExerciseName, normalizeExerciseInput } from '@/src/data/exercises';
 import { emptyGymData, LEGACY_KEY } from '@/src/data/legacy';
 import { serializeBackup } from '@/src/data/backup';
-import type { GymRepository } from '@/src/data/gym-repository';
+import type { GymRepository, StorageHealth } from '@/src/data/gym-repository';
 import { createId, previousCompletedSets, defaultSetForTracking, copySetForNewSession } from '@/src/lib/workouts';
 import { buildStarterRoutine, createRoutineTemplate, duplicateRoutineTemplate, routineToWorkout, validateRoutine } from '@/src/data/routines';
 import type { Exercise, ExerciseInput, GymData, Preferences, TrainingSet, Workout, WorkoutMovement, RoutineTemplate, BodyMeasurement, FitnessGoal, FoodItem, MealEntry, NutritionTargets, WaterEntry, RecoveryEntry, GymBackup } from '@/src/types/gym';
 
 type GymContextValue = {
   ready: boolean;
+  retryInitialization: () => void;
+  checkStorageHealth: () => Promise<StorageHealth>;
   welcomeDone: boolean;
   completeWelcome: () => Promise<void>;
   exportBackup: () => Promise<string>;
@@ -79,6 +81,12 @@ const SAVE_ERROR = 'Unable to save changes to SQLite. Your latest edits may exis
  */
 export function GymProvider({ children }: { children: ReactNode }) {
   const [ready, setReady] = useState(false);
+  const [startupAttempt, setStartupAttempt] = useState(0);
+  const retryInitialization = useCallback(() => {
+    setError(null);
+    setReady(false);
+    setStartupAttempt(value => value + 1);
+  }, []);
   const [welcomeDone, setWelcomeDone] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'error'>('saved');
@@ -110,6 +118,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     mountedRef.current = true;
+    let cancelled = false;
     async function restore() {
       try {
         const repository = await openGymRepository();
@@ -128,7 +137,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
         const alreadyHasData = restored.workouts.length + savedExercises.length + savedRoutines.length +
           savedMeasurements.length + savedGoals.length + savedFoods.length + savedMeals.length +
           savedWater.length + savedRecovery.length > 0 || savedTargets !== null;
-        if (!mountedRef.current) return;
+        if (cancelled || !mountedRef.current) return;
         repositoryRef.current = repository;
         latestRef.current = restored;
         setData(restored);
@@ -152,7 +161,7 @@ export function GymProvider({ children }: { children: ReactNode }) {
         setWelcomeDone(welcomeValue === 'complete' || alreadyHasData);
         setReady(true);
       } catch (cause) {
-        if (!mountedRef.current) return;
+        if (cancelled || !mountedRef.current) return;
         const reason = cause instanceof Error ? cause.message : 'Unknown database error';
         // Stay on the fatal-error screen instead of treating an import failure
         // as a brand-new, empty database. Existing data is never overwritten.
@@ -160,8 +169,8 @@ export function GymProvider({ children }: { children: ReactNode }) {
       }
     }
     void restore();
-    return () => { mountedRef.current = false; };
-  }, []);
+    return () => { cancelled = true; mountedRef.current = false; };
+  }, [startupAttempt]);
 
   const queueOptimistic = useCallback((operation: (repo: GymRepository) => Promise<void>) => {
     const repo = repositoryRef.current;
@@ -483,6 +492,13 @@ export function GymProvider({ children }: { children: ReactNode }) {
     if (mountedRef.current) setWelcomeDone(true);
   }, []);
 
+  const checkStorageHealth = useCallback(async (): Promise<StorageHealth> => {
+    await flushChanges();
+    const repo = repositoryRef.current;
+    if (!repo) throw new Error('Workout database is unavailable');
+    return repo.checkStorageHealth();
+  }, [flushChanges]);
+
   const exportBackup = useCallback(async (): Promise<string> => {
     await flushChanges();
     const repo = repositoryRef.current;
@@ -717,7 +733,8 @@ export function GymProvider({ children }: { children: ReactNode }) {
 
   return (
     <GymContext.Provider value={{
-      ready, error, saveStatus, retrySave, welcomeDone, completeWelcome, exportBackup, restoreBackup,
+      ready, error, saveStatus, retrySave, retryInitialization, checkStorageHealth,
+      welcomeDone, completeWelcome, exportBackup, restoreBackup,
       workouts: data.workouts, preferences: data.preferences,
       customExercises, createCustomExercise, updateCustomExercise, archiveCustomExercise,
       routines, saveRoutine, createRoutine, importStarterRoutine, duplicateRoutine, deleteRoutine, startRoutineWorkout,

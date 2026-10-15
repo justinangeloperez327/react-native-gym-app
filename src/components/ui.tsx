@@ -88,8 +88,8 @@ export function AppButton({
   destructive?: boolean;
 }) {
   const { colors } = useAppTheme();
-  const bg = secondary ? colors.surface : colors.primary;
-  const fg = destructive ? colors.danger : secondary ? colors.text : colors.onPrimary;
+  const bg = secondary ? colors.surface : destructive ? colors.danger : colors.primary;
+  const fg = secondary ? (destructive ? colors.danger : colors.text) : colors.onPrimary;
   return (
     <Pressable
       accessibilityRole="button"

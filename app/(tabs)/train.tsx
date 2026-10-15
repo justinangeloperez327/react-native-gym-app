@@ -12,6 +12,9 @@ export default function TrainScreen() {
   const { workouts, routines, startWorkout, startRoutineWorkout, createRoutine, importStarterRoutine } = useGym();
   const { colors } = useAppTheme();
   const [busy, setBusy] = useState(false);
+  const [visibleRoutines, setVisibleRoutines] = useState(10);
+  const [visibleActive, setVisibleActive] = useState(5);
+  const [visibleScheduled, setVisibleScheduled] = useState(5);
   const active = workouts.filter((workout) => !workout.finishedAt);
   const today = new Date().getDay();
   const scheduled = routines.filter((routine) => routine.days.includes(today));
@@ -47,11 +50,14 @@ export default function TrainScreen() {
       <ScreenHeader title="Train" subtitle="Repeat a plan or log a fresh session" />
       <View style={{ gap: 10 }}>
         <SectionTitle>Today · {WEEKDAYS[today]}</SectionTitle>
-        {scheduled.length ? scheduled.map((routine) => (
+        {scheduled.length ? scheduled.slice(0, visibleScheduled).map((routine) => (
           <RoutineCard key={routine.id} routine={routine}
             onStart={() => { void run(() => startRoutineWorkout(routine.id)); }} busy={busy} />
         )) : <EmptyState title="No routine scheduled for today"
           description="Assign weekdays to any saved routine to build your weekly training plan." />}
+        {scheduled.length > visibleScheduled ? <AppButton secondary
+          title={'Show more scheduled routines (' + (scheduled.length - visibleScheduled) + ')'}
+          onPress={() => setVisibleScheduled(count => count + 5)} /> : null}
       </View>
       <View style={{ gap: 10 }}>
         <SectionTitle>Quick start</SectionTitle>
@@ -60,12 +66,15 @@ export default function TrainScreen() {
       <View style={{ gap: 10 }}>
         <SectionTitle>Your routines</SectionTitle>
         <AppButton title="+ Create routine" secondary onPress={() => { void makeRoutine(); }} disabled={busy} />
-        {routines.length ? routines.map((routine) => (
+        {routines.length ? routines.slice(0, visibleRoutines).map((routine) => (
           <RoutineCard key={routine.id} routine={routine} onStart={() => { void run(() => startRoutineWorkout(routine.id)); }} busy={busy} />
         )) : (
           <EmptyState title="No saved routines"
             description="Create a routine or copy a starter program to build a repeatable weekly plan." />
         )}
+        {routines.length > visibleRoutines ? <AppButton secondary
+          title={'Show more routines (' + (routines.length - visibleRoutines) + ')'}
+          onPress={() => setVisibleRoutines(count => count + 10)} /> : null}
       </View>
       <View style={{ gap: 10 }}>
         <SectionTitle>Starter programs</SectionTitle>
@@ -80,12 +89,15 @@ export default function TrainScreen() {
       </View>
       <View style={{ gap: 10 }}>
         <SectionTitle>Active sessions</SectionTitle>
-        {active.length ? active.map((workout) => (
+        {active.length ? active.slice(0, visibleActive).map((workout) => (
           <WorkoutPreview key={workout.id} workout={workout} />
         )) : (
           <EmptyState title="No active session"
             description="An unfinished session stays available here until you complete or delete it." />
         )}
+        {active.length > visibleActive ? <AppButton secondary
+          title={'Show more active sessions (' + (active.length - visibleActive) + ')'}
+          onPress={() => setVisibleActive(count => count + 5)} /> : null}
       </View>
       <AppButton title="View workout history" secondary
         onPress={() => router.push('/(tabs)/progress')} />

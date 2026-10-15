@@ -35,12 +35,37 @@ function Option<T extends string>({
 }
 
 export default function SettingsScreen() {
-  const { preferences, updatePreferences, exportBackup, restoreBackup, saveStatus } = useGym();
+  const { preferences, updatePreferences, exportBackup, restoreBackup, checkStorageHealth, saveStatus, retrySave } = useGym();
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<GymBackup | null>(null);
   const [issue, setIssue] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [healthStatus, setHealthStatus] = useState<string | null>(null);
   const { colors } = useAppTheme();
+  async function runStorageCheck() {
+    if (busy) return;
+    setBusy(true);
+    setIssue(null);
+    setHealthStatus(null);
+    try {
+      const report = await checkStorageHealth();
+      const healthy = report.integrityOk && report.foreignKeysEnabled &&
+        report.foreignKeyViolations === 0 && report.schemaVersion === 9;
+      setHealthStatus(healthy
+        ? 'Database checks passed · SQLite schema ' + report.schemaVersion +
+          ' · no foreign-key violations.'
+        : 'Storage check needs attention · Schema ' + report.schemaVersion +
+          ' · Integrity ' + (report.integrityOk ? 'OK' : 'FAILED') +
+          ' · FK enabled ' + (report.foreignKeysEnabled ? 'yes' : 'no') +
+          ' · FK violations ' + report.foreignKeyViolations +
+          '. Do not delete app data. Preserve an existing backup and investigate before release.');
+    } catch (cause) {
+      setIssue(cause instanceof Error ? cause.message : 'Storage check could not be completed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function shareBackup() {
     if (busy) return;
     setBusy(true); setIssue(null); setNotice(null);
@@ -110,6 +135,17 @@ export default function SettingsScreen() {
         <AppButton title="Back" secondary onPress={() => router.back()} />
       </View>
       <Heading title="Settings" subtitle="Your training preferences" />
+      {saveStatus === 'error' ? <Panel>
+        <Text accessibilityRole="alert" style={{ color: colors.danger, fontSize: 13 }}>
+          Recent workout or preference changes may not have been saved to local storage.
+        </Text>
+        <AppButton title="Retry saving pending changes" secondary disabled={busy}
+          onPress={() => { void retrySave().catch(cause =>
+            setIssue(cause instanceof Error ? cause.message : 'Retry failed')); }} />
+      </Panel> : saveStatus === 'saving' ?
+        <Text accessibilityLiveRegion="polite" style={{ color: colors.muted, fontSize: 13 }}>
+          Saving local changes…
+        </Text> : null}
       <View style={{ gap: 10 }}>
         <SectionTitle>Weight unit</SectionTitle>
         <Panel>
@@ -140,6 +176,19 @@ export default function SettingsScreen() {
                 onSelect={(theme) => updatePreferences({ theme })} />
             ))}
           </View>
+        </Panel>
+      </View>
+      <View style={{ gap: 10 }}>
+        <SectionTitle>Storage diagnostics</SectionTitle>
+        <Panel>
+          <Text style={{ color: colors.muted, fontSize: 13, lineHeight: 20 }}>
+            Run a read-only SQLite integrity and relationship check. This does not delete,
+            repair, or export data. It may take longer on large journals.
+          </Text>
+          <AppButton title={busy ? 'Working…' : 'Check local database integrity'} secondary
+            disabled={busy} onPress={() => { void runStorageCheck(); }} />
+          {healthStatus ? <Text accessibilityRole="alert"
+            style={{ color: colors.text, fontSize: 13, lineHeight: 20 }}>{healthStatus}</Text> : null}
         </Panel>
       </View>
       <View style={{ gap: 10 }}>
