@@ -366,7 +366,7 @@ Automated TypeScript, integration and bundle checks do not substitute for native
 - [x] Strict manual evidence gate requiring actual EAS project ownership, approved icon, privacy/support info and per-platform QA completion.
 - [x] Privacy policy and store listing **drafts** plus platform release guide and ignored QA-approval template.
 - [x] CI checks that release profiles are valid independently of release approval.
-- [ ] Verify GitHub Actions checks on committed main.
+- [x] Verify GitHub Actions checks on committed main (116 tests, Expo validation, both platform JS bundles).
 
 ### External / manual release blockers
 - [ ] Link EAS to the actual Expo account and commit generated `expo.extra.eas.projectId`.
