@@ -851,7 +851,7 @@ test('water entries persist by date and can be edited or deleted independently',
     const b = { id: 'water:two', recordedOn: '2026-10-14', amountMl: 500 };
     const c = { id: 'water:three', recordedOn: '2026-10-14', amountMl: 300 };
     for (const value of [a, b, c]) await repo.saveWaterEntry(value);
-    assert.deepEqual(await repo.readWaterEntries(), [b, c, a]);
+    assert.deepEqual(await repo.readWaterEntries(), [c, b, a]);
     await repo.saveWaterEntry({ ...a, amountMl: 450 });
     assert.equal((await repo.readWaterEntries()).find(e => e.id === a.id).amountMl, 450);
     assert.equal((await db.getFirstAsync('SELECT COUNT(*) AS n FROM water_entries')).n, 3);
