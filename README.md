@@ -11,14 +11,14 @@ See the [approved product roadmap](docs/product-plan.md) for the scope and 15 im
 ## Current features
 
 - Navigate across Home, Train, Nutrition, Progress and Library; Settings opens from the screen header.
-- Start and finish strength workouts with repetition-based movements.
+- Start and finish strength, bodyweight and cardio workouts using repetition, duration or distance logging.
 - Search and filter strength, bodyweight, and cardio activities by muscle group and equipment.
 - Create, edit and archive custom exercises in SQLite without losing historical workout references.
 - Track sets, repetitions, loads, completed sets and workout volume.
 - Resume unfinished sessions, write workout/exercise notes, review and copy previous sets, and remove individual sets.
 - Build reusable workout routines with ordered exercises, target sets/reps/weight and recurring weekly schedules.
 - See local save status and retry failed writes; workout start/finish waits for SQLite confirmation.
-- View workouts and training history.
+- View workout history with date filters, eight-week frequency/volume/distance charts, exercise progression and personal records.
 - Choose kg/lb and light/dark/system appearance.
 - Store workout data locally in Expo SQLite with transactional writes and schema migrations.
 - Import valid legacy AsyncStorage workouts without deleting the original source.
@@ -67,7 +67,7 @@ Or run `npm run validate` for all checks together. The GitHub Actions workflow r
 app/                  Expo Router routes and tab layouts
 src/components/       Shared UI building blocks
 src/data/             Exercise catalog, schema migrations, SQLite repository
-src/lib/              Workout calculations, unit conversion
+src/lib/              Workout calculations, training analytics, unit conversion
 src/state/            React data provider backed by SQLite
 src/theme/            Shared UI tokens, semantic colors and appearance
 src/types/            Workout domain types
@@ -120,3 +120,14 @@ Repetition sets can be marked **normal, warmup, drop, or failure**. Individual e
 Pair an exercise with the previous workout movement to make a superset; you can also unpair it. Superset grouping is stored with the workout and survives reopening the session. This version does not implement automatic alternating sets or sophisticated superset sequencing.
 
 The exercise picker and reusable routines now allow timed and distance-based activities. Routine targets can include duration or distance as well as rep/weight values. SQLite schema **version 5** adds the optional measurement fields, set types, rest targets, and superset group IDs; previous records retain their original meaning.
+
+
+## Workout history and training analytics (Group 8)
+
+The **Progress** tab summarizes completed training, shows interactive eight-week charts for workout frequency, training volume and distance, and filters history by last 30 days, last 90 days or all time. The weekly chart uses device-local Monday–Sunday calendar weeks, including zero-activity weeks. Workouts are dated by session completion time.
+
+Exercise progression shows personal records and recent session charts, with a history list linked to completed workouts. Archived custom exercises remain discoverable using their historical IDs.
+
+Strength records exclude warmup and incomplete sets. The estimated one-rep max uses Epley's formula only for positive external load and 1–10 reps; this is a calculation, not a measured maximum. Strength volume includes all completed sets (including warmups), while distance and duration are tracked separately. Cardio records reflect the longest individual completed distance/duration set.
+
+Analytics run locally from saved workout history, without adding a backend or a new database migration. Large-history scalability, chart usability and accessibility still need native device testing.

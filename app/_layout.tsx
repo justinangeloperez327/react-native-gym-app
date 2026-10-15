@@ -29,6 +29,7 @@ function Navigation() {
         <Stack.Screen name="exercise-picker" />
         <Stack.Screen name="exercise-form" />
         <Stack.Screen name="routine/[id]" />
+        <Stack.Screen name="exercise-progress/[id]" />
       </Stack>
     </>
   );

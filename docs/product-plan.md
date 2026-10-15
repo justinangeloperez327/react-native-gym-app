@@ -170,7 +170,7 @@ Group 5 will harden active session persistence when the app backgrounds or is fo
 - [ ] Verify CI and device-level interaction on Android and iOS.
 
 ### Deliberate scope boundary
-The library can describe cardio and timed activities, but actual distance/duration session logging belongs to Group 7. Custom exercises are soft-archived rather than physically deleted, preserving referential meaning for historical workouts. Built-in IDs from Group 1 stay unchanged.
+The Group 4 catalog initially contained cardio as library-only. Group 7 subsequently introduced cardio and timed logging. Custom exercises are soft-archived rather than physically deleted, preserving referential meaning for historical workouts. Built-in IDs from Group 1 stay unchanged.
 
 ## Group 5: Workout Tracking Engine
 
@@ -203,7 +203,7 @@ The library can describe cardio and timed activities, but actual distance/durati
 - [x] Verify CI on main.
 - [ ] Smoke test routine creation, editing, scheduling and launching on Android/iOS devices.
 
-**Scope:** Only repetition-based templates can start sessions. Cardio, timers, and distance targets remain in Group 7. Scheduling is recurring weekday guidance, not a notification service.
+**Group 6 scope at implementation:** Initial templates supported repetitions. Group 7 subsequently added cardio, timed and distance targets. Scheduling is recurring weekday guidance, not a notification service.
 
 ## Group 7: Advanced Training and Cardio
 
@@ -221,6 +221,24 @@ The library can describe cardio and timed activities, but actual distance/durati
 - [ ] Verify Android/iOS keyboard behavior, rest countdown on background/foreground, and native migration.
 
 **Scope limitations:** Superset group labels do not automatically alternate or schedule sets; rest timers do not send notifications and are not durable across an app process kill. Future usability tests will address these cases.
+
+## Group 8: Workout History and Training Analytics
+
+### Implemented
+- [x] Testable local aggregates derived strictly from completed workouts.
+- [x] All-time totals for workouts, completed sets, strength volume, cardio distance and activity time.
+- [x] Eight-week local Monday–Sunday trends with explicit zero-activity weeks.
+- [x] Interactive native bar charts for frequency, volume and distance.
+- [x] 30-day, 90-day and all-time workout-history filters with incremental disclosure.
+- [x] Exercise-specific progression and individual session drilldown.
+- [x] Best weight, most repetitions and estimated one-rep maximum for strength movements.
+- [x] Cardio duration/distance records and archived custom exercise lookups.
+- [x] Tests covering incomplete sessions, future dates, record ties and week boundaries.
+- [ ] Confirm CI on main.
+- [ ] Android/iOS large-text, legibility and large-history performance verification.
+
+### Metric definitions
+Only completed sets from finished workouts count. Warmups count for volume but do not qualify for strength PRs. Estimated 1RM uses Epley's formula for 1–10 reps with positive external load. Cardio duration and distance are separate from lifting volume. Body metrics and goals are planned for Group 9.
 
 ## Versioning
 
