@@ -66,7 +66,7 @@ export default function SettingsScreen() {
     setBusy(true); setPending(null); setIssue(null); setNotice(null);
     try {
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/json', 'text/plain'], copyToCacheDirectory: true, multiple: false,
+        type: '*/*', copyToCacheDirectory: true, multiple: false,
       });
       if (result.canceled) return;
       const asset = result.assets[0];

@@ -153,10 +153,13 @@ export function serializeBackup(backup: GymBackup): string {
 export function describeBackup(backup: GymBackup): string {
   return [
     backup.snapshot.workouts.length + ' workouts',
+    backup.customExercises.length + ' custom exercises',
     backup.routines.length + ' routines',
+    backup.measurements.length + ' measurements',
+    backup.goals.length + ' fitness goals',
     backup.foods.length + ' foods',
     backup.meals.length + ' meals',
-    backup.measurements.length + ' measurements',
+    (backup.nutritionTargets ? 'nutrition targets set' : 'no nutrition targets'),
     backup.waterEntries.length + ' water logs',
     backup.recoveryEntries.length + ' recovery check-ins',
   ].join(' · ');
