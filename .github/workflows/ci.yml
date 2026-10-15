@@ -31,5 +31,9 @@ jobs:
         run: npm run check:release-config
       - name: Expo SDK dependency compatibility
         run: npm run check:expo
+      - name: Inspect evaluated Android/iOS native configuration
+        run: |
+          npx expo config --type introspect --json > /tmp/gym-expo-introspection.json
+          npm run check:native-config -- /tmp/gym-expo-introspection.json
       - name: Bundle production JavaScript for Android and iOS
         run: npx expo export --platform all --output-dir /tmp/gym-ci-bundles
