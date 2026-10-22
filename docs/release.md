@@ -25,7 +25,7 @@ signing credentials and `EXPO_TOKEN` are also needed for EAS preview builds.
 
 ## One-time EAS setup (authorized Expo/Apple/Google account owner)
 
-1. Install dependencies with `npm ci` and run `npm run validate` plus `npm run check:release-config`.
+1. Use **Node.js 24** (`nvm use` reads `.nvmrc`), install dependencies with `npm ci`, and run `npm run validate` plus `npm run check:release-config`. Framework dependencies are Expo-SDK coordinated; use `npx expo install --check` and a reviewed Expo upgrade rather than automatically merging major React Native, React or Expo dependency PRs.
 2. Install and authenticate the EAS CLI using [Expo's EAS Build documentation](https://docs.expo.dev/build/introduction/). Run `eas login`, then `eas init` in this repository to generate the real EAS project UUID. Commit the resulting `expo.extra.eas.projectId` in `app.json`. Never invent a UUID.
 3. Configure Android signing keys and iOS Apple Developer certificates/provisioning using `eas credentials`; verify developer-account access, package IDs and distribution rights. Keep credentials in Expo's credential service or a secure vault, not this Git repo.
 4. Configure the **GitHub Actions** secret `EXPO_TOKEN` for an Expo token with minimal rights. No credentials are present in this repository.

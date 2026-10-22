@@ -32,7 +32,7 @@ There is no authentication, backend, cloud sync, or automatic backup. SQLite is 
 
 ## Requirements
 
-- **Node.js 22** (22.13 or later); `.nvmrc` pins the supported major.
+- **Node.js 24** (active Node 24 release); `.nvmrc`, npm engines and GitHub Actions use the same major.
 - npm.
 - A recent Android/iOS emulator or a physical device with Expo Go.
 - macOS and Xcode are required for the iOS simulator.

@@ -5,6 +5,22 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
+    # Expo SDK 57 provides an integrated native compatibility matrix.
+    # Upgrade these only as a tested SDK cohort, never as independent PRs.
+    ignore:
+      - dependency-name: expo
+      - dependency-name: "expo-*"
+      - dependency-name: "@expo/*"
+      - dependency-name: react
+      - dependency-name: react-dom
+      - dependency-name: "@types/react"
+      - dependency-name: react-native
+      - dependency-name: "react-native-*"
+      - dependency-name: "@react-native/*"
+      # TypeScript major releases require deliberate Expo/Metro validation.
+      - dependency-name: typescript
+        update-types:
+          - version-update:semver-major
   - package-ecosystem: github-actions
     directory: /
     schedule:
