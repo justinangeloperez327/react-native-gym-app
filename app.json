@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Gym App",
-    "slug": "react-native-gym-app",
+    "slug": "gym-app",
     "description": "Offline-first training, nutrition, and wellbeing tracking.",
     "scheme": "gymapp",
     "version": "0.1.0",
@@ -23,6 +23,7 @@
     },
     "plugins": [
       "expo-router"
-    ]
+    ],
+    "owner": "justin327"
   }
 }
